@@ -145,13 +145,13 @@ if app:
     APP_UUID = app["uuid"]
     print(f"✅ 已有应用: {app.get('name')}  uuid={APP_UUID}")
 
-    # 确保使用 dockerfile buildpack（容器内构建 MkDocs）
+    # 确保使用 dockercompose buildpack（通过 docker-compose.yml 的 build.network: host 绕过 BuildKit 限制）
     patch = api("PATCH", f"/applications/{APP_UUID}", json={
-        "build_pack":      "dockerfile",
+        "build_pack":      "dockercompose",
         "install_command": "",
     })
     if patch.ok:
-        print(f"✅ 应用配置已更新（build_pack=dockerfile）")
+        print(f"✅ 应用配置已更新（build_pack=dockercompose）")
 
     step("Step 6: 强制重建并部署（force_rebuild=true）")
     # POST /start with force_rebuild=true 让 Coolify 忽略 SHA 缓存重新构建镜像
@@ -176,7 +176,7 @@ else:
         "environment_name":       ENVIRONMENT,
         "git_repository":         GIT_REPO,
         "git_branch":             GIT_BRANCH,
-        "build_pack":             "dockerfile",
+        "build_pack":             "dockercompose",
         "name":                   APP_NAME,
         "domains":                DOMAIN,
         "is_auto_deploy_enabled": True,

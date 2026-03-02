@@ -70,6 +70,11 @@ if result.returncode != 0:
     sys.exit(1)
 print("✅ MkDocs 构建成功")
 
+# 将 site/ 内容复制到仓库根目录（Coolify nginx 从根目录提供服务）
+step("Step 1b: 将 site/ 内容同步到仓库根目录")
+run(f"cp -r {LOCAL_DIR}/site/. {LOCAL_DIR}/", cwd=LOCAL_DIR)
+print("✅ site/ 内容已同步到根目录")
+
 # ─── Step 2: 推送到 GitHub ────────────────────────────────────────────────────
 step("Step 2: 推送 MkDocs 源文件到 GitHub")
 os.chdir(LOCAL_DIR)

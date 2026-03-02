@@ -64,7 +64,7 @@ pip install mkdocs mkdocs-material plantuml-markdown jieba
 启动支持热重载的本地开发服务器：
 
 ```bash
-./preview.sh
+python3 serve_local.py
 ```
 
 浏览器访问 **http://127.0.0.1:8000** 即可预览。  
@@ -98,7 +98,7 @@ python3 deploy_to_coolify.py
 ├── Dockerfile             # 多阶段构建（MkDocs → nginx）
 ├── docker-compose.yaml    # Coolify 部署配置
 ├── nginx.conf             # nginx 服务配置
-├── preview.sh             # 本地预览脚本
+├── serve_local.py         # 本地预览脚本
 ├── deploy_to_coolify.py   # 一键部署脚本
 ├── .env                   # 密钥文件（不提交到 git）
 └── .gitignore

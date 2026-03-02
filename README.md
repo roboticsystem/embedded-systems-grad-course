@@ -64,7 +64,7 @@ pip install mkdocs mkdocs-material plantuml-markdown jieba
 Start a local development server with live reload:
 
 ```bash
-./preview.sh
+python3 serve_local.py
 ```
 
 The site will be available at **http://127.0.0.1:8000**.  
@@ -98,7 +98,7 @@ The production site is served at **http://robotic.uwis.cn**.
 ├── Dockerfile             # Multi-stage build (MkDocs → nginx)
 ├── docker-compose.yaml    # Coolify deployment configuration
 ├── nginx.conf             # nginx serving configuration
-├── preview.sh             # Local preview script
+├── serve_local.py         # Local preview script
 ├── deploy_to_coolify.py   # One-command deployment script
 ├── .env                   # Secrets (not committed to git)
 └── .gitignore

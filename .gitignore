@@ -1,5 +1,5 @@
-# MkDocs 构建输出（需要提交，Coolify 静态部署依赖它）
-# site/
+# MkDocs 构建输出（由 Coolify 在容器内构建，不提交到 git）
+site/
 
 # Python
 __pycache__/

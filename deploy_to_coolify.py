@@ -32,6 +32,7 @@ GIT_REPO_AUTH = f"https://{GITHUB_TOKEN}@github.com/uwislab/robotics-systems-cou
 GIT_BRANCH    = "main"
 DOMAIN        = "http://robotic.uwis.cn"
 ENVIRONMENT   = "production"
+# install_command 在 Coolify 容器内执行（构建 MkDocs → 生成 site/）
 INSTALL_CMD   = "pip install mkdocs mkdocs-material && mkdocs build"
 PUBLISH_DIR   = "site"
 LOCAL_DIR     = os.path.dirname(os.path.abspath(__file__))  # 脚本所在目录
@@ -59,21 +60,13 @@ def run(cmd, cwd=None, check=True):
     return subprocess.run(cmd, shell=True, cwd=cwd, check=check,
                           capture_output=False, text=True)
 
-# ─── Step 1: 构建 MkDocs 站点 ─────────────────────────────────────────────────
-step("Step 1: 构建 MkDocs 静态站点")
-result = subprocess.run(
-    ["mkdocs", "build", "-f", "mkdocs.yml"],
-    cwd=LOCAL_DIR,
-)
-if result.returncode != 0:
-    print("❌ MkDocs 构建失败，中止部署")
-    sys.exit(1)
-print("✅ MkDocs 构建成功")
-
-# 将 site/ 内容复制到仓库根目录（Coolify nginx 从根目录提供服务）
-step("Step 1b: 将 site/ 内容同步到仓库根目录")
-run(f"cp -r {LOCAL_DIR}/site/. {LOCAL_DIR}/", cwd=LOCAL_DIR)
-print("✅ site/ 内容已同步到根目录")
+# ─── Step 1: 确认本地源文件完整 ──────────────────────────────────────────────
+step("Step 1: 检查源文件")
+for required in ["mkdocs.yml", "docs", "nginx.conf"]:
+    if not os.path.exists(os.path.join(LOCAL_DIR, required)):
+        print(f"❌ 缺少必要文件: {required}")
+        sys.exit(1)
+print("✅ 源文件检查通过（MkDocs 将在 Coolify 容器内构建）")
 
 # ─── Step 2: 推送到 GitHub ────────────────────────────────────────────────────
 step("Step 2: 推送 MkDocs 源文件到 GitHub")
@@ -154,6 +147,15 @@ app = next(
 if app:
     APP_UUID = app["uuid"]
     print(f"✅ 已有应用: {app.get('name')}  uuid={APP_UUID}")
+
+    # 确保 Coolify 应用配置正确（build_pack=static，install_command 含 mkdocs build）
+    patch = api("PATCH", f"/applications/{APP_UUID}", json={
+        "build_pack":      "static",
+        "install_command": INSTALL_CMD,
+        "publish_directory": PUBLISH_DIR,
+    })
+    if patch.ok:
+        print(f"✅ 应用配置已更新（install_command / publish_directory）")
 
     step("Step 6: 强制重建并部署（force_rebuild=true）")
     # POST /start with force_rebuild=true 让 Coolify 忽略 SHA 缓存重新构建镜像

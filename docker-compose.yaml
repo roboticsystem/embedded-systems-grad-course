@@ -2,7 +2,7 @@ services:
   web:
     build:
       context: .
-      network: host      # 允许 pip install 访问互联网，绕过 coolify 网络限制
-    ports:
-      - "80:80"
+      network: host      # 允许构建阶段访问互联网（pip install）
+    expose:
+      - "80"             # 仅暴露给 Coolify 内部网络，不绑定 host port
     restart: unless-stopped

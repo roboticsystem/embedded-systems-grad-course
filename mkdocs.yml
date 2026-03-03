@@ -3,6 +3,7 @@ site_url: http://robotic.uwis.cn
 copyright: 成都信息工程大学 软件工程学院
 nav:
   - 首页: index.md
+  - 教师简介: instructor.md
   - 课程介绍: intro.md
   - 教学大纲: syllabus.md
   - 参考资料: resources.md

@@ -1,7 +1,7 @@
 # ── Stage 1: 构建 MkDocs ──────────────────────────────────────────────────────
-FROM python:3.12-alpine AS builder
+FROM python:3.12-slim AS builder
 WORKDIR /build
-RUN pip install --no-cache-dir mkdocs mkdocs-material plantuml-markdown jieba
+RUN pip install --no-cache-dir mkdocs mkdocs-material plantuml-markdown markdown-svgbob jieba
 COPY . .
 RUN mkdocs build
 

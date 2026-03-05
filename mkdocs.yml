@@ -13,11 +13,6 @@ theme:
   name: material
   features:
     - navigation.expand
-  font:
-    code: Fira Code
-
-extra_css:
-  - assets/stylesheets/monospace-ascii.css
 
 plugins:
   - search:
@@ -29,3 +24,8 @@ markdown_extensions:
   - plantuml_markdown:
       server: https://www.plantuml.com/plantuml
       format: png
+  - markdown_svgbob:
+      tag_type: inline_svg
+      bg_color: white
+      fg_color: black
+      min_char_width: 80

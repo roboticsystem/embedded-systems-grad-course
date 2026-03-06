@@ -88,7 +88,7 @@ def detect_copilot_cli():
     return None
 
 def generate_commit_message(cwd):
-    fallback = "chore: update course content"
+    fallback = "chore: 更新课程内容"
 
     # Only use staged diff so message matches what is actually committed.
     diff_res = run_capture("git diff --cached --no-color", cwd=cwd)
@@ -101,8 +101,9 @@ def generate_commit_message(cwd):
 
     # Uses new Copilot CLI prompt mode for non-interactive generation.
     prompt = (
-        "Generate ONE Conventional Commit title from this staged git diff. "
-        "Output only one line in format type(scope): subject, max 72 chars, no quotes, no code block.\\n\\n"
+        "请基于这份 staged git diff 生成 ONE 条 Conventional Commit 标题。"
+        "仅输出一行，格式为 type(scope): subject 或 type: subject，subject 使用中文，"
+        "长度不超过 72 个字符，不要引号，不要代码块。\\n\\n"
         f"{diff_excerpt}"
     )
 
@@ -176,7 +177,7 @@ def edit_commit_message_tui(initial_message):
             pass
 
 def review_commit_message(initial_message):
-    commit_message = initial_message.strip() or "chore: update course content"
+    commit_message = initial_message.strip() or "chore: 更新课程内容"
 
     # Keep non-interactive runs deterministic (CI/cron) and avoid waiting for input.
     if not sys.stdin.isatty():
@@ -218,36 +219,73 @@ def review_commit_message(initial_message):
 
         print("⚠️  无效输入，请输入 Y / E / N")
 
-def wait_for_site_ready(base_url, timeout_sec=180, interval_sec=8):
+def wait_for_site_ready(
+    base_url,
+    timeout_sec=240,
+    interval_sec=8,
+    min_wait_sec=40,
+    stable_rounds=3,
+):
     deadline = time.time() + timeout_sec
+    started_at = time.time()
     checks = [
         f"{base_url}/",
         f"{base_url}/assets/stylesheets/main.484c7ddc.min.css",
         f"{base_url}/assets/javascripts/bundle.79ae519e.min.js",
     ]
+    request_headers = {
+        "Cache-Control": "no-cache, no-store, max-age=0",
+        "Pragma": "no-cache",
+    }
     last_status = {}
+    success_streak = 0
 
-    print(f"⏳ 等待站点就绪（最多 {timeout_sec} 秒）...")
+    print(
+        f"⏳ 等待站点就绪（最多 {timeout_sec} 秒，至少等待 {min_wait_sec} 秒，连续 {stable_rounds} 轮通过）..."
+    )
     while time.time() < deadline:
         all_ok = True
         for url in checks:
             try:
-                r = requests.get(url, timeout=10, verify=False)
+                r = requests.get(
+                    url,
+                    timeout=10,
+                    verify=False,
+                    headers=request_headers,
+                    params={"_health": str(int(time.time()))},
+                )
                 last_status[url] = r.status_code
                 if r.status_code != 200:
                     all_ok = False
+                    continue
+
+                if url.endswith("/"):
+                    body = (r.text or "").lower()
+                    if not all(marker in body for marker in ["<html", "assets/stylesheets"]):
+                        all_ok = False
+                        last_status[url] = "200-but-invalid-html"
             except requests.RequestException:
                 all_ok = False
                 last_status[url] = "ERR"
 
-        if all_ok:
-            print("✅ 站点已就绪，首页与关键静态资源可访问")
+        elapsed = int(time.time() - started_at)
+
+        if all_ok and elapsed >= min_wait_sec:
+            success_streak += 1
+        else:
+            success_streak = 0
+
+        if success_streak >= stable_rounds:
+            print("✅ 站点已稳定就绪，首页内容与关键静态资源可访问")
             return True
 
-        print(f"  站点未就绪，{interval_sec}s 后重试: {last_status}")
+        print(
+            f"  站点未稳定就绪，{interval_sec}s 后重试: "
+            f"elapsed={elapsed}s, streak={success_streak}/{stable_rounds}, status={last_status}"
+        )
         time.sleep(interval_sec)
 
-    print("❌ 站点在等待窗口内仍未就绪，请检查 Coolify 部署日志")
+    print("❌ 站点在等待窗口内仍未稳定就绪，请检查 Coolify 部署日志")
     print(f"  最后探测状态: {last_status}")
     return False
 

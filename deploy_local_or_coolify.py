@@ -359,6 +359,51 @@ def _wait_for_site(app_uuid: str, timeout_sec: int = 240):
     return False
 
 
+def _verify_exams_deployed():
+    """部署后验证：登录教师账号，检查考试列表是否非空。"""
+    import requests
+    import urllib3
+    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+    teacher_pwd = os.environ.get("TEACHER_PASSWORD", "admin123")
+    base_url = f"https://{DOMAIN}/api/teacher"
+    print("\n🔍 验证远端考试数据...")
+
+    try:
+        # 登录
+        r = requests.post(f"{base_url}/login",
+                          json={"password": teacher_pwd},
+                          timeout=15, verify=False)
+        if not r.ok:
+            print(f"  ⚠️  教师登录失败 HTTP {r.status_code}")
+            return
+
+        token = r.json().get("token", "")
+        if not token:
+            print("  ⚠️  登录未返回 token")
+            return
+
+        # 查询考试列表
+        r2 = requests.get(f"{base_url}/exams",
+                          headers={"Authorization": f"Bearer {token}"},
+                          timeout=15, verify=False)
+        if not r2.ok:
+            print(f"  ⚠️  考试列表接口返回 HTTP {r2.status_code}")
+            return
+
+        exams = r2.json()
+        if isinstance(exams, list) and len(exams) > 0:
+            print(f"  ✅ 远端教师后台已有 {len(exams)} 个考试：")
+            for e in exams:
+                print(f"     - [{e.get('id')}] {e.get('title')}")
+        else:
+            print(f"  ❌ 考试列表仍为空（{exams!r}）")
+            print("     请检查容器启动日志中 [sync_exams] 的输出")
+
+    except Exception as exc:
+        print(f"  ⚠️  验证时出错：{exc}")
+
+
 def _ensure_compose_domain(app_uuid: str):
     resp = _coolify_api("PATCH", f"/applications/{app_uuid}", json={
         "docker_compose_domains": [{"name": COMPOSE_SERVICE, "domain": DOMAIN}]
@@ -378,13 +423,24 @@ def _sync_env_vars(app_uuid: str):
     # 合并容器固定路径变量（DOCS_DIR、DB_PATH 等）
     all_vars = {**vars_to_sync, **CONTAINER_FIXED_ENV}
 
+    # 先获取已存在的 env var 列表（key → id）
+    existing_ids: dict[str, str] = {}
+    r0 = _coolify_api("GET", f"/applications/{app_uuid}/envs")
+    if r0.ok:
+        for item in r0.json():
+            existing_ids[item.get("key", "")] = str(item.get("uuid") or item.get("id", ""))
+
     for key, value in all_vars.items():
         if not value:
             continue
-        # This Coolify version uses PATCH on the collection endpoint as an upsert
-        # (create-or-update). POST returns 409 if the key already exists.
-        r = _coolify_api("PATCH", f"/applications/{app_uuid}/envs",
-                         json={"key": key, "value": value})
+        if key in existing_ids and existing_ids[key]:
+            # 已存在 → PATCH 更新（使用 env var 的 uuid/id）
+            r = _coolify_api("PATCH", f"/applications/{app_uuid}/envs",
+                             json={"key": key, "value": value})
+        else:
+            # 不存在 → POST 创建
+            r = _coolify_api("POST", f"/applications/{app_uuid}/envs",
+                             json={"key": key, "value": value, "is_build_time": False})
         if r.ok:
             print(f"  ✅ 环境变量 {key}")
         else:
@@ -511,6 +567,8 @@ def deploy_coolify(sync_summary: dict):
 
     if not _wait_for_site(app_uuid):
         sys.exit(1)
+
+    _verify_exams_deployed()
 
     print(f"\n🌐 站点地址: {DOMAIN}")
     print("🎉 部署完成，可直接访问课程内容")

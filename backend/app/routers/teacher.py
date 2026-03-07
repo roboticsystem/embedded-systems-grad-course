@@ -8,6 +8,7 @@ from typing import Optional
 from pydantic import BaseModel
 from app.database import db
 from app.auth_utils import create_token, verify_teacher_token
+from app.sync_exams import sync_exams
 from pypinyin import lazy_pinyin, Style
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment
@@ -176,6 +177,15 @@ def list_exams(authorization: Optional[str] = Header(None)):
     _require_teacher(authorization)
     with db() as conn:
         exams = conn.execute("SELECT id, title, is_active FROM exams ORDER BY id").fetchall()
+
+    # 懒加载同步：若数据库中还没有考试记录，尝试立即扫描文档目录
+    if not exams:
+        print("[list_exams] 考试表为空，触发懒加载同步…")
+        sync_exams()
+        with db() as conn:
+            exams = conn.execute("SELECT id, title, is_active FROM exams ORDER BY id").fetchall()
+
+    with db() as conn:
         total_students = conn.execute("SELECT COUNT(*) FROM students").fetchone()[0]
         result = []
         for e in exams:

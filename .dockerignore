@@ -16,4 +16,3 @@ deploy_local_or_coolify.py
 requirements.txt
 mkdocs.yml
 README*.md
-nginx.conf

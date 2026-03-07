@@ -29,8 +29,8 @@ if os.path.exists(_env_file):
 # ─── 配置区 ────────────────────────────────────────────────────────────────────
 COOLIFY_BASE  = "https://coolify.uwis.cn/api/v1"
 API_KEY       = os.environ.get("COOLIFY_API_KEY", "")
-PROJECT_NAME  = "robotic_system"
-APP_NAME      = "robotic-site"
+PROJECT_NAME  = "Robotics_Systems_Course"
+APP_NAME      = "robotics_systems_course"
 GITHUB_TOKEN  = os.environ.get("GITHUB_TOKEN", "")
 GIT_REPO      = "https://github.com/uwislab/robotics-systems-course.git"
 GIT_REPO_AUTH = f"https://{GITHUB_TOKEN}@github.com/uwislab/robotics-systems-course.git"

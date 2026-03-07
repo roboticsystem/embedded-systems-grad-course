@@ -9,9 +9,90 @@
 import subprocess
 import sys
 import os
+import signal
+import time
 from pathlib import Path
 
 REQUIREMENTS_FILE = Path(__file__).resolve().parent / "requirements.txt"
+HOST = "127.0.0.1"
+PORT = 8008
+
+
+def _collect_pids_on_port(port: int):
+    """Return PIDs listening on the given TCP port using common Linux tools."""
+    pid_set = set()
+
+    commands = [
+        ["lsof", "-ti", f"tcp:{port}"],
+        ["fuser", "-n", "tcp", str(port)],
+    ]
+
+    for cmd in commands:
+        try:
+            res = subprocess.run(cmd, capture_output=True, text=True, check=False)
+        except FileNotFoundError:
+            continue
+
+        text = (res.stdout or "") + " " + (res.stderr or "")
+        for token in text.replace("\n", " ").split():
+            if token.isdigit():
+                pid_set.add(int(token))
+
+    return sorted(pid_set)
+
+
+def _is_port_busy(host: str, port: int) -> bool:
+    import socket
+
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        try:
+            sock.bind((host, port))
+            return False
+        except OSError:
+            return True
+
+
+def ensure_port_available(host: str, port: int):
+    if not _is_port_busy(host, port):
+        return
+
+    print(f"⚠️  端口 {port} 已被占用，尝试清理旧预览进程...")
+    pids = _collect_pids_on_port(port)
+
+    if not pids:
+        print("❌ 无法识别占用进程，请手动释放端口后重试")
+        sys.exit(1)
+
+    for pid in pids:
+        try:
+            os.kill(pid, signal.SIGTERM)
+            print(f"  - 已发送 SIGTERM 给 PID {pid}")
+        except ProcessLookupError:
+            continue
+        except PermissionError:
+            print(f"❌ 无权限结束 PID {pid}")
+            sys.exit(1)
+
+    time.sleep(1)
+
+    if _is_port_busy(host, port):
+        for pid in pids:
+            try:
+                os.kill(pid, signal.SIGKILL)
+                print(f"  - 已发送 SIGKILL 给 PID {pid}")
+            except ProcessLookupError:
+                continue
+            except PermissionError:
+                print(f"❌ 无权限强制结束 PID {pid}")
+                sys.exit(1)
+        time.sleep(0.5)
+
+    if _is_port_busy(host, port):
+        print(f"❌ 端口 {port} 仍被占用，请手动检查后重试")
+        sys.exit(1)
+
+    print(f"✅ 端口 {port} 已释放")
 
 def install_requirements():
     if not REQUIREMENTS_FILE.exists():
@@ -26,11 +107,12 @@ def install_requirements():
 
 def main():
     install_requirements()
+    ensure_port_available(HOST, PORT)
 
     print("=" * 50)
     print("  本地预览服务器")
     print("=" * 50)
-    print("🌐 地址: http://127.0.0.1:8008")
+    print(f"🌐 地址: http://{HOST}:{PORT}")
     print("🔄 文件保存后自动刷新")
     print("⛔ Ctrl+C 停止\n")
 
@@ -39,7 +121,7 @@ def main():
         # mkdocs-material 9.7.x prints this banner unconditionally; keep logs clean locally.
         env.setdefault("NO_MKDOCS_2_WARNING", "1")
         subprocess.run(
-            ["mkdocs", "serve", "-a", "127.0.0.1:8008", "--open", "--watch-theme"],
+            ["mkdocs", "serve", "-a", f"{HOST}:{PORT}", "--open", "--watch-theme"],
             env=env,
             check=True,
         )

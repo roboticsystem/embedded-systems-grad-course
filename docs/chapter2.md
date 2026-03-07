@@ -742,3 +742,101 @@ void StartProcessTask(void *argument)
 | FreeRTOS 任务卡死 | 在任务中使用了 `HAL_Delay` | 全部替换为 `osDelay` |
 | 堆栈溢出崩溃 | 任务栈空间不足 | 增大 Stack Size，或使用 `uxTaskGetStackHighWaterMark` 监控 |
 | HAL_Delay 不准 | FreeRTOS 占用了 SysTick | CubeMX 已自动切换时基到 TIM，无需手动处理 |
+
+---
+
+## 7  本章在线测试（10 题）
+
+<!-- mkdocs-quiz intro -->
+
+<quiz>
+1) 在 CubeMX 中，若要使用 ST-Link 下载与调试，`SYS -> Debug` 应设置为哪一项？
+- [x] Serial Wire (SWD)
+- [ ] Disabled
+- [ ] JTAG only
+
+正确。课程中强调必须启用 SWD，否则会影响下载和调试。
+</quiz>
+
+<quiz>
+2) Blue Pill 标准 72MHz 配置中，外部晶振通常设置为：
+- [x] HSE = Crystal/Ceramic Resonator（8MHz）
+- [ ] HSI = 72MHz
+- [ ] LSE = 32MHz
+
+正确。常见做法是 8MHz HSE 经过 PLL 倍频得到 72MHz。
+</quiz>
+
+<quiz>
+3) 在引脚视图中，红色高亮通常表示：
+- [ ] 引脚已成功配置
+- [x] 引脚功能冲突
+- [ ] 引脚未使用
+
+正确。红色通常意味着两个外设占用了同一引脚。
+</quiz>
+
+<quiz>
+4) 下列哪个步骤用于让 CubeMX 自动计算主频相关参数？
+- [x] 在 Clock Configuration 中直接输入 HCLK=72 并回车
+- [ ] 手工修改每个寄存器位
+- [ ] 删除 .ioc 重新创建工程
+
+正确。直接输入目标频率后，CubeMX 会自动联动计算。
+</quiz>
+
+<quiz>
+5) 关于 `User Label`（例如给 PC13 标记为 LED），正确的是：
+- [x] 会在 `main.h` 生成对应宏，便于代码维护
+- [ ] 只影响 UI 显示，不会影响代码
+- [ ] 会自动生成 FreeRTOS 任务
+
+正确。`User Label` 会反映到宏定义中，减少硬编码。
+</quiz>
+
+<quiz>
+6) 在 FreeRTOS 任务函数中应优先使用哪个延时函数？
+- [ ] HAL_Delay(ms)
+- [x] osDelay(ms)
+- [ ] delay_us(ms)
+
+正确。`osDelay()` 会让出 CPU，不会阻塞整个调度器。
+</quiz>
+
+<quiz>
+7) 重新生成代码时，哪类代码最容易被覆盖？
+- [x] 写在 `USER CODE BEGIN/END` 标记之外的手写代码
+- [ ] 写在 `USER CODE BEGIN/END` 内的代码
+- [ ] `main.h` 的自动生成宏定义
+
+正确。用户逻辑必须放在 USER CODE 区域内。
+</quiz>
+
+<quiz>
+8) 下列关于工程目录的说法哪些正确？
+- [x] `Core/Src` 是主要用户代码编写位置
+- [x] `Drivers/` 中 HAL 源码通常不建议手工改动
+- [ ] `.ioc` 文件只是日志文件，可删除
+
+正确。`.ioc` 是配置源文件，后续迭代离不开它。
+</quiz>
+
+<quiz>
+9) 若新增 USART1 后重新 Generate Code，最合理的预期是：
+- [x] CubeMX 自动补充 `MX_USART1_UART_Init()`，并尽量保留 USER CODE 区域内容
+- [ ] 所有用户代码都会被清空
+- [ ] 需要手动重装 HAL 库
+
+正确。自动补充初始化并保留 USER CODE 是 CubeMX 的关键优势。
+</quiz>
+
+<quiz>
+10) 当 CubeMX 中出现引脚冲突时，优先处理方式是：
+- [ ] 直接修改 Drivers 下 HAL 源码
+- [x] 在 CubeMX 中重新分配冲突引脚或调整外设映射
+- [ ] 删除冲突外设对应中断向量
+
+正确。引脚冲突应在图形配置层解决，而不是硬改底层库。
+</quiz>
+
+<!-- mkdocs-quiz results -->

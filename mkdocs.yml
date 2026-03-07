@@ -20,6 +20,7 @@ plugins:
       lang:
         - zh
         - en
+  - mkdocs_quiz
 
 markdown_extensions:
   - plantuml_markdown:

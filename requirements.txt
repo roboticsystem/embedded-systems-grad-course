@@ -3,3 +3,4 @@ mkdocs-material>=9.0,<10.0
 plantuml-markdown<4.0
 markdown-svgbob>=202006.1015
 jieba<1.0
+mkdocs-quiz>=1.6,<2.0

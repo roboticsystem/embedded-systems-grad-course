@@ -16,8 +16,10 @@
 (function () {
   "use strict";
 
-  // 后端 API 基础路径（与 MkDocs 站点同域，通过 Nginx 转发）
-  const API = "";
+  // 后端 API 基础路径
+  // 本地开发时（localhost/127.0.0.1）FastAPI 跑在 :8009，生产环境由 Nginx 同域转发
+  const IS_LOCAL = location.hostname === "127.0.0.1" || location.hostname === "localhost";
+  const API = IS_LOCAL ? "http://127.0.0.1:8009" : "";
 
   // ── 工具函数 ──────────────────────────────────────────
   function qs(sel, root) { return (root || document).querySelector(sel); }

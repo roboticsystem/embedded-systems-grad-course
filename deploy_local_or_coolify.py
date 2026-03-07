@@ -374,20 +374,32 @@ def _sync_env_vars(app_uuid: str):
     existing = {}
     if resp.ok:
         for env in resp.json():
-            existing[env.get("key", "")] = env.get("uuid", "")
+            # Coolify may return "uuid" or "id" depending on version
+            env_id = env.get("uuid") or env.get("id", "")
+            key = env.get("key", "")
+            if key and env_id:
+                existing[key] = str(env_id)
+    else:
+        print(f"  ℹ️  获取现有环境变量失败 HTTP {resp.status_code}，将尝试直接创建")
 
     for key, value in vars_to_sync.items():
         if not value:
             continue
+        r = None
         if key in existing:
             r = _coolify_api("PATCH", f"/applications/{app_uuid}/envs/{existing[key]}",
                              json={"key": key, "value": value})
-        else:
+            # Fall back to POST if PATCH returns 404 (stale UUID or version mismatch)
+            if r.status_code == 404:
+                r = None
+        if r is None:
             r = _coolify_api("POST", f"/applications/{app_uuid}/envs",
                              json={"key": key, "value": value,
                                    "is_preview": False, "is_build_time": False})
-        status = "✅" if r.ok else "⚠️ 失败"
-        print(f"  {status} 环境变量 {key}")
+        if r.ok:
+            print(f"  ✅ 环境变量 {key}")
+        else:
+            print(f"  ⚠️  环境变量 {key} 同步失败  HTTP {r.status_code}: {r.text}")
 
 
 def deploy_coolify(sync_summary: dict):

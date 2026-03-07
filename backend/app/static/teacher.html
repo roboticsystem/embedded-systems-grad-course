@@ -13,7 +13,7 @@
   .header button:hover { background: rgba(255,255,255,.35); }
   .container { max-width: 1000px; margin: 24px auto; padding: 0 16px; }
   .card { background: #fff; border-radius: 8px; box-shadow: 0 1px 4px rgba(0,0,0,.12); margin-bottom: 20px; overflow: hidden; }
-  .card-title { background: #e3f2fd; padding: 12px 20px; font-weight: bold; font-size: .95rem; border-bottom: 1px solid #bbdefb; }
+  .card-title { background: #e3f2fd; padding: 12px 20px; font-weight: bold; font-size: .95rem; border-bottom: 1px solid #bbdefb; display: flex; align-items: center; justify-content: space-between; }
   .card-body { padding: 20px; }
   .login-wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center; }
   .login-box { background: #fff; padding: 40px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,.15); width: 340px; text-align: center; }
@@ -26,8 +26,14 @@
   .btn-primary:hover { background: #0d47a1; }
   .btn-success { background: #2e7d32; color: #fff; }
   .btn-success:hover { background: #1b5e20; }
+  .btn-danger { background: #c62828; color: #fff; }
+  .btn-danger:hover { background: #b71c1c; }
+  .btn-warning { background: #e65100; color: #fff; }
+  .btn-warning:hover { background: #bf360c; }
   .btn-outline { background: transparent; color: #1565c0; border: 1px solid #1565c0; }
   .btn-outline:hover { background: #e3f2fd; }
+  .btn-outline-danger { background: transparent; color: #c62828; border: 1px solid #c62828; }
+  .btn-outline-danger:hover { background: #ffebee; }
   .btn-sm { padding: 6px 14px; font-size: .85rem; }
   .btn-full { width: 100%; }
   .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 16px; }
@@ -59,6 +65,16 @@
   .slider:before { content: ""; position: absolute; width: 18px; height: 18px; left: 3px; bottom: 3px; background: #fff; border-radius: 50%; transition: .3s; }
   input:checked + .slider { background: #1565c0; }
   input:checked + .slider:before { transform: translateX(18px); }
+  /* 添加学生表单 */
+  .add-form { display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 8px; align-items: end; }
+  .add-form input { margin-bottom: 0; }
+  .form-label { font-size: .8rem; color: #555; margin-bottom: 4px; display: block; }
+  /* 确认弹窗 */
+  .confirm-dialog-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 9999; display: flex; align-items: center; justify-content: center; }
+  .confirm-dialog { background: #fff; border-radius: 10px; padding: 28px 24px; max-width: 400px; width: 90%; box-shadow: 0 8px 32px rgba(0,0,0,.2); text-align: center; }
+  .confirm-dialog h3 { margin-bottom: 10px; }
+  .confirm-dialog p { color: #666; font-size: .9rem; margin-bottom: 20px; line-height: 1.6; }
+  .confirm-dialog .btn-row { display: flex; gap: 10px; justify-content: center; }
   #app { display: none; }
 </style>
 </head>
@@ -85,7 +101,7 @@
 
     <!-- 上传名单 -->
     <div class="card">
-      <div class="card-title">📋 上传学生名单</div>
+      <div class="card-title">📋 上传学生名单（批量）</div>
       <div class="card-body">
         <div id="upload-msg"></div>
         <p style="font-size:.88rem;color:#888;margin-bottom:12px">
@@ -100,6 +116,43 @@
         <div style="margin-top:12px">
           <button class="btn btn-success" onclick="uploadStudents()">上传名单</button>
         </div>
+      </div>
+    </div>
+
+    <!-- 学生名单管理 -->
+    <div class="card">
+      <div class="card-title">
+        <span>👤 学生名单管理</span>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-outline-danger btn-sm" onclick="confirmClearStudents()">🗑 清空全部名单</button>
+          <button class="btn btn-warning btn-sm" onclick="confirmNewSemester()">🔄 新学期重置</button>
+        </div>
+      </div>
+      <div class="card-body">
+        <div id="student-msg"></div>
+
+        <!-- 添加单个学生 -->
+        <div style="margin-bottom:16px;">
+          <p style="font-size:.88rem;font-weight:bold;margin-bottom:8px;color:#555">➕ 添加单个学生</p>
+          <div class="add-form">
+            <div>
+              <label class="form-label">姓名 *</label>
+              <input type="text" id="add-name" placeholder="如：张三">
+            </div>
+            <div>
+              <label class="form-label">学号 *</label>
+              <input type="text" id="add-sid" placeholder="如：20230001">
+            </div>
+            <div>
+              <label class="form-label">班级（可选）</label>
+              <input type="text" id="add-class" placeholder="如：2023级软工1班">
+            </div>
+            <button class="btn btn-primary btn-sm" style="height:42px;white-space:nowrap" onclick="addStudent()">添加</button>
+          </div>
+        </div>
+
+        <!-- 学生列表 -->
+        <div id="student-list">加载中…</div>
       </div>
     </div>
 
@@ -139,6 +192,7 @@ async function doLogin() {
     document.getElementById('login-page').style.display = 'none';
     document.getElementById('app').style.display = 'block';
     loadExams();
+    loadStudentList();
   } catch(e) { showMsg('login-msg', '网络错误：' + e, 'error'); }
 }
 
@@ -167,6 +221,7 @@ async function uploadStudents() {
     if (!r.ok) { showMsg('upload-msg', d.detail || '上传失败', 'error'); return; }
     showMsg('upload-msg', `✅ 成功导入 ${d.count} 名学生`, 'success');
     loadExams();
+    loadStudentList();
   } catch(e) { showMsg('upload-msg', '网络错误：' + e, 'error'); }
 }
 
@@ -274,7 +329,136 @@ async function downloadExcel(examId, title) {
   a.click();
 }
 
-// 初始化：检查已有 token
+// ───── 学生名单管理 ─────
+
+async function loadStudentList() {
+  const r = await fetch(`${API}/api/teacher/students/list`, {
+    headers: {'Authorization': `Bearer ${TOKEN}`}
+  });
+  if (!r.ok) { document.getElementById('student-list').innerHTML = '<p style="color:#c62828">加载失败</p>'; return; }
+  const students = await r.json();
+  if (!students.length) {
+    document.getElementById('student-list').innerHTML = '<p style="color:#888;font-size:.9rem">名单为空，请添加学生或上传 CSV</p>';
+    return;
+  }
+  const rows = students.map(s => `
+    <tr>
+      <td>${s.name}</td>
+      <td>${s.student_id}</td>
+      <td>${s.class_name || '—'}</td>
+      <td>
+        <button class="btn btn-outline-danger btn-sm" onclick="deleteStudent('${s.student_id}','${s.name}')">删除</button>
+      </td>
+    </tr>
+  `).join('');
+  document.getElementById('student-list').innerHTML = `
+    <p style="font-size:.85rem;color:#888;margin-bottom:8px">共 ${students.length} 名学生</p>
+    <table>
+      <thead><tr><th>姓名</th><th>学号</th><th>班级</th><th>操作</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+  `;
+}
+
+async function addStudent() {
+  const name = document.getElementById('add-name').value.trim();
+  const sid  = document.getElementById('add-sid').value.trim();
+  const cls  = document.getElementById('add-class').value.trim();
+  if (!name || !sid) { showMsg('student-msg', '姓名和学号不能为空', 'error'); return; }
+  try {
+    const r = await fetch(`${API}/api/teacher/students/add`, {
+      method: 'POST',
+      headers: {'Authorization': `Bearer ${TOKEN}`, 'Content-Type': 'application/json'},
+      body: JSON.stringify({name, student_id: sid, class_name: cls || null})
+    });
+    const d = await r.json();
+    if (!r.ok) { showMsg('student-msg', d.detail || '添加失败', 'error'); return; }
+    showMsg('student-msg', `✅ 已添加学生：${name}（${sid}）`);
+    document.getElementById('add-name').value = '';
+    document.getElementById('add-sid').value = '';
+    document.getElementById('add-class').value = '';
+    loadStudentList();
+    loadExams();
+  } catch(e) { showMsg('student-msg', '网络错误：' + e, 'error'); }
+}
+
+async function deleteStudent(sid, name) {
+  showConfirmDialog(
+    '删除学生',
+    `确认删除学生 <strong>${name}（${sid}）</strong>？<br>该学生的成绩记录也将一并删除。`,
+    async () => {
+      const r = await fetch(`${API}/api/teacher/students/${encodeURIComponent(sid)}`, {
+        method: 'DELETE',
+        headers: {'Authorization': `Bearer ${TOKEN}`}
+      });
+      const d = await r.json();
+      if (!r.ok) { showMsg('student-msg', d.detail || '删除失败', 'error'); return; }
+      showMsg('student-msg', `✅ 已删除学生：${name}`);
+      loadStudentList();
+      loadExams();
+    }
+  );
+}
+
+function confirmClearStudents() {
+  showConfirmDialog(
+    '⚠️ 清空全部学生名单',
+    '此操作将删除<strong>所有学生名单</strong>及其成绩记录，无法恢复。<br>确认要继续吗？',
+    async () => {
+      const r = await fetch(`${API}/api/teacher/students`, {
+        method: 'DELETE',
+        headers: {'Authorization': `Bearer ${TOKEN}`}
+      });
+      const d = await r.json();
+      if (!r.ok) { showMsg('student-msg', d.detail || '操作失败', 'error'); return; }
+      showMsg('student-msg', '✅ 已清空全部学生名单');
+      loadStudentList();
+      loadExams();
+    }
+  );
+}
+
+function confirmNewSemester() {
+  showConfirmDialog(
+    '🔄 新学期重置',
+    '此操作将删除<strong>所有学生名单、所有考试记录和全部成绩</strong>，相当于全新开始。<br><br>此操作<strong>无法撤销</strong>，确认继续？',
+    async () => {
+      const r = await fetch(`${API}/api/teacher/reset`, {
+        method: 'POST',
+        headers: {'Authorization': `Bearer ${TOKEN}`}
+      });
+      const d = await r.json();
+      if (!r.ok) { showMsg('student-msg', d.detail || '操作失败', 'error'); return; }
+      showMsg('student-msg', '✅ 新学期重置完成，所有数据已清空');
+      currentExamId = null;
+      examsData = [];
+      loadStudentList();
+      loadExams();
+    }
+  );
+}
+
+// ───── 确认对话框 ─────
+
+function showConfirmDialog(title, message, onConfirm) {
+  const backdrop = document.createElement('div');
+  backdrop.className = 'confirm-dialog-backdrop';
+  backdrop.innerHTML = `
+    <div class="confirm-dialog">
+      <h3>${title}</h3>
+      <p>${message}</p>
+      <div class="btn-row">
+        <button class="btn btn-outline btn-sm" id="confirm-cancel">取消</button>
+        <button class="btn btn-danger btn-sm" id="confirm-ok">确认执行</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(backdrop);
+  backdrop.querySelector('#confirm-cancel').onclick = () => backdrop.remove();
+  backdrop.querySelector('#confirm-ok').onclick = () => { backdrop.remove(); onConfirm(); };
+}
+
+// ───── 初始化：检查已有 token ─────
 if (TOKEN) {
   fetch(`${API}/api/teacher/exams`, { headers: {'Authorization': `Bearer ${TOKEN}`} })
     .then(r => {
@@ -282,6 +466,7 @@ if (TOKEN) {
         document.getElementById('login-page').style.display = 'none';
         document.getElementById('app').style.display = 'block';
         loadExams();
+        loadStudentList();
       } else {
         TOKEN = ''; sessionStorage.removeItem('teacher_token');
       }

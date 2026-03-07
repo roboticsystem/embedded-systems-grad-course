@@ -94,6 +94,83 @@ async def upload_students(
     return {"count": len(records)}
 
 
+class AddStudentRequest(BaseModel):
+    name: str
+    student_id: str
+    class_name: str = ""
+
+
+@router.post("/api/teacher/students/add")
+def add_student(req: AddStudentRequest, authorization: Optional[str] = Header(None)):
+    """添加单个学生"""
+    _require_teacher(authorization)
+    req.name = req.name.strip()
+    req.student_id = req.student_id.strip()
+    if not req.name or not req.student_id:
+        raise HTTPException(status_code=422, detail="姓名和学号不能为空")
+    pinyin, abbr = _name_to_pinyin(req.name)
+    with db() as conn:
+        existing = conn.execute(
+            "SELECT name FROM students WHERE student_id=?", (req.student_id,)
+        ).fetchone()
+        if existing:
+            raise HTTPException(status_code=409, detail=f"学号 {req.student_id} 已存在（{existing['name']}）")
+        conn.execute(
+            "INSERT INTO students (name, student_id, class_name, pinyin, pinyin_abbr) VALUES (?,?,?,?,?)",
+            (req.name, req.student_id, req.class_name.strip(), pinyin, abbr)
+        )
+    return {"ok": True}
+
+
+@router.delete("/api/teacher/students/{student_id}")
+def delete_student(student_id: str, authorization: Optional[str] = Header(None)):
+    """删除单个学生（同时删除其成绩）"""
+    _require_teacher(authorization)
+    with db() as conn:
+        student = conn.execute(
+            "SELECT name FROM students WHERE student_id=?", (student_id,)
+        ).fetchone()
+        if not student:
+            raise HTTPException(status_code=404, detail="学号不存在")
+        conn.execute("DELETE FROM scores WHERE student_id=?", (student_id,))
+        conn.execute("DELETE FROM students WHERE student_id=?", (student_id,))
+    return {"ok": True, "deleted": student["name"]}
+
+
+@router.delete("/api/teacher/students")
+def clear_all_students(authorization: Optional[str] = Header(None)):
+    """清空全部学生名单（同时清空所有成绩）"""
+    _require_teacher(authorization)
+    with db() as conn:
+        count = conn.execute("SELECT COUNT(*) FROM students").fetchone()[0]
+        conn.execute("DELETE FROM scores")
+        conn.execute("DELETE FROM students")
+    return {"ok": True, "deleted_count": count}
+
+
+@router.post("/api/teacher/reset")
+def new_semester_reset(authorization: Optional[str] = Header(None)):
+    """新学期重置：清空所有学生名单 + 所有成绩"""
+    _require_teacher(authorization)
+    with db() as conn:
+        students = conn.execute("SELECT COUNT(*) FROM students").fetchone()[0]
+        scores   = conn.execute("SELECT COUNT(*) FROM scores").fetchone()[0]
+        conn.execute("DELETE FROM scores")
+        conn.execute("DELETE FROM students")
+    return {"ok": True, "deleted_students": students, "deleted_scores": scores}
+
+
+@router.get("/api/teacher/students/list")
+def list_students(authorization: Optional[str] = Header(None)):
+    """获取全部学生名单"""
+    _require_teacher(authorization)
+    with db() as conn:
+        rows = conn.execute(
+            "SELECT name, student_id, class_name FROM students ORDER BY class_name, name"
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
 @router.get("/api/teacher/exams")
 def list_exams(authorization: Optional[str] = Header(None)):
     _require_teacher(authorization)

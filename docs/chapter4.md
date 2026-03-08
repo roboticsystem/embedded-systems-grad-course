@@ -564,6 +564,175 @@ void task_uart_process(void *arg) {
   （高优先级，快速返回）        └──────────┘          （低优先级，可阻塞）
 ```
 
+
+### 4.3  三种嵌入式程序结构
+
+本小节讨论三种常见的嵌入式程序结构模式：模式1（最慢，单任务轮询）、模式2（多任务，一个任务循环处理一个外设）与模式3（中断模式，含中断上半部/下半部，通过信号量协作）。每种模式给出适用场景、优缺点、关键实现要点与简化代码示例，并辅以时序图或模块交互图，便于工程实践选择与权衡。
+
+#### 模式1：单任务轮询（最慢但最简单）
+
+- 核心思想：在一个主循环中顺序轮询各个外设或模块，适用于资源极其受限或实时性要求极低的场景。
+- 适用场景：非常简单的设备、早期原型或对实时性无严格要求的小型控制器。
+- 优点：实现极其简单，无调度开销；缺点：响应延迟大，无法并发处理，CPU 利用率与实时性难以保证。
+
+示意代码：
+
+```c
+/* 模式1：单任务轮询示例 */
+int main(void) {
+    platform_init();
+    for (;;) {
+        if (sensor_ready()) {
+            read_sensor_process();
+        }
+        if (uart_has_data()) {
+            uart_process();
+        }
+        if (time_for_control()) {
+            control_loop();
+        }
+        /* 可能的短延时以避免忙等待 */
+        delay_ms(1);
+    }
+}
+```
+
+时序图（轮询）：
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Main as 主循环
+    participant Sensor as 传感器
+    participant UART as 串口
+    Main->>Sensor: 定期检查
+    Main->>UART: 定期检查
+    Main->>Control: 定期执行控制
+```
+
+---
+
+#### 模式2：多任务（每任务负责一个外设的循环处理）
+
+- 核心思想：将系统分解为多个独立的循环任务，每个任务负责一个外设或功能模块，通过 RTOS 提供的任务调度实现并发与优先级控制。
+- 适用场景：功能清晰划分、需并发处理若干 IO 或复杂逻辑的中等规模嵌入式系统。
+- 优点：代码模块化、各任务互不干扰、可通过优先级控制响应性；缺点：需要 RTOS 支持，存在任务切换与同步开销。
+
+示意代码（基于 FreeRTOS）：
+
+```c
+/* 模式2：每个外设一个任务 */
+void vSensorTask(void *pv) {
+    for (;;) {
+        read_sensor();
+        process_sensor();
+        vTaskDelay(pdMS_TO_TICKS(100));
+    }
+}
+
+void vCommTask(void *pv) {
+    for (;;) {
+        if (xQueueReceive(qRx, &msg, pdMS_TO_TICKS(10)) == pdPASS) {
+            handle_msg(&msg);
+        }
+    }
+}
+
+/* main 创建任务并启动 */
+int main(void) {
+    platform_init();
+    xTaskCreate(vSensorTask, "Sensor", 256, NULL, tskIDLE_PRIORITY+2, NULL);
+    xTaskCreate(vCommTask, "Comm",  256, NULL, tskIDLE_PRIORITY+1, NULL);
+    vTaskStartScheduler();
+}
+```
+
+模块交互图：
+
+```mermaid
+flowchart LR
+  SensorTask[SensorTask] -->|queue| Proc[Processing]
+  Proc -->|mutex| SharedResource
+  CommTask[CommTask] -->|queue| Proc
+```
+
+实践要点：
+- 任务优先级应根据响应性与处理时间谨慎设置，避免高优先级任务长时间占用导致低优先级任务饥饿或优先级反转；
+- 使用队列、互斥量或事件组进行任务间通信与同步，优先使用 RTOS 原语而非自行实现的轮询共享变量；
+- 对于确定性要求高的路径，减少动态内存分配与长时间阻塞。
+
+---
+
+#### 模式3：中断驱动（上半部/下半部）
+
+- 核心思想：以外设中断作为事件触发机制，在 ISR（上半部）进行最小化处理（捕获时间戳、读寄存器、缓存数据、通知任务），将耗时或复杂处理延后到任务上下文的下半部完成（通过信号量、消息队列或任务通知实现协作）。
+- 适用场景：对响应时间有严格要求的系统，需要在中断到达时快速响应并在更高层完成复杂处理的场合。
+- 优点：低延迟响应、灵活的复杂处理下放；缺点：需要正确设计中断上下文与并发同步，错误容易导致竞态或死锁。
+
+时序图（上/下半部协作，使用信号量）
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant IRQ as 硬件中断
+    participant ISR as 中断上半部
+    participant Task as 下半部任务
+    IRQ->>ISR: 中断到达（采集寄存器）
+    ISR->>ISR: 快速缓存/记录时间戳
+    ISR->>Task: xSemaphoreGiveFromISR()
+    ISR-->>Task: 可能触发上下文切换
+    Task->>Task: xSemaphoreTake() 恢复处理
+    Task->>App: 完成复杂处理（解析、存储、上报）
+```
+
+关键实现示例（FreeRTOS）：
+
+```c
+/* 全局信号量 */
+static SemaphoreHandle_t xDataReadySem;
+
+/* ISR 上半部 */
+void EXTI0_IRQHandler(void) {
+    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+    uint32_t data = READ_HARDWARE_REG();
+    buffer_push(&data);
+    xSemaphoreGiveFromISR(xDataReadySem, &xHigherPriorityTaskWoken);
+    portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+}
+
+/* 下半部任务 */
+void vDataProcessTask(void *pv) {
+    for (;;) {
+        if (xSemaphoreTake(xDataReadySem, portMAX_DELAY) == pdPASS) {
+            uint32_t d;
+            while (buffer_pop(&d)) {
+                process_data(d);
+            }
+        }
+    }
+}
+```
+
+实现要点与注意事项：
+- ISR 必须尽可能短小，避免在 ISR 中进行阻塞或复杂算法；
+- 使用 FromISR 版本的 API（如 xSemaphoreGiveFromISR、xQueueSendFromISR）以保证中断安全；
+- 若 ISR 唤醒更高优先级任务，必须使用 portYIELD_FROM_ISR 请求上下文切换以保证实时性；
+- 设计好上半部对下半部的数据传递（环形缓冲、固定大小消息、指针传递），避免在中断中进行堆内存分配。
+
+---
+
+#### 三种模式对比（工程决策参考）
+
+| 模式 | 响应延迟 | 实现复杂度 | 资源开销 | 适用场景 |
+|---|---:|---:|---:|---|
+| 单任务轮询 | 高（最差） | 低 | 最小 | 简单原型、资源极限设备 |
+| 多任务（RTOS） | 中等（可调） | 中等 | 中等（需要 RTOS 支撑） | 需并发处理与优先级控制的系统 |
+| 中断驱动（上/下半部） | 最低（最好） | 高 | 中等 | 对延迟敏感的实时场景 |
+
+工程建议：在实际工程中，常常采用混合策略——对严格实时的事件使用中断上/下半部，对周期性或非关键业务使用任务循环，通过 RTOS 原语进行协作，以达到响应性与系统可维护性的平衡。
+
+---
+
 ---
 
 ## 5  命令模式

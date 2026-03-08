@@ -2,10 +2,9 @@ site_name: 《机器人系统》课程
 site_url: https://robotic.uwis.cn
 copyright: 成都信息工程大学 软件工程学院
 nav:
-  - 首页: index.md
-  - 教师简介: instructor.md
-  - 课程介绍: intro.md
+  - 课程简介: index.md
   - 教学大纲: syllabus.md
+  - 教师简介: instructor.md
   - 课程内容:
       - 第1章 机器人基础: chapter1.md
       - 第2章 CubeMX编程指南: chapter2.md

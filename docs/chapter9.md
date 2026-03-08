@@ -17,13 +17,13 @@
 
 ```mermaid
 flowchart TD
-  R[参考输入 R(s)] -->|误差 e(s)=R(s)-Y(s)| Summing[Σ]
-  Summing --> C[控制器 C(s)]
-  C --> U[控制量 U(s)]
-  U --> Plant[G(s)]
-  Plant --> Y[被控对象 Y(s)]
-  Y -->|反馈| Summing
-  Dist[干扰 D(s)] -->|加到被控对象| Plant
+  R[参考输入] -->|误差| Sum[求和节点]
+  Sum --> C[控制器]
+  C --> U[控制量]
+  U --> Plant[被控对象]
+  Plant --> Y[系统输出]
+  Y -->|反馈| Sum
+  Dist[干扰] -->|加到被控对象| Plant
 ```
 
 关键概念：误差、控制器、被控对象（对象模型常以传递函数 G(s) 表达）、闭环传递函数 H_cl(s) = C(s)G(s) / (1 + C(s)G(s))。性能指标包括响应时间、稳态误差、过冲、相位裕度与增益裕度等。
@@ -42,13 +42,13 @@ C(s) = K_p + K_i / s + K_d * s
 
 ```mermaid
 flowchart LR
-  E[误差 e(t)] -->|比例| P[Kp*e(t)]
-  E -->|积分| I[Ki * integral e(t) dt]
-  E -->|微分| D[Kd * d/dt e(t)]
-  P --> SUM[总和]
-  I --> SUM
-  D --> SUM
-  SUM --> U[控制量 u(t)]
+  E[误差] -->|比例| P[比例项]
+  E -->|积分| I[积分项]
+  E -->|微分| D[微分项]
+  P --> Sum[总和]
+  I --> Sum
+  D --> Sum
+  Sum --> U[控制量]
 ```
 
 - 比例项 (P)：提供与误差成比例的控制作用，能减小稳态误差但可能产生稳态偏差；
@@ -137,13 +137,13 @@ G(s) = K/(τ s + 1)
 
 ```mermaid
 flowchart TD
-  Ref[目标速度 ω_ref] -->|误差 e| SUM[Σ]
-  SUM --> PID[离散 PID]
-  PID --> PWM[占空比 u]
-  PWM --> Motor[电机 + 驱动 G(z)]
+  Ref[目标速度] -->|误差 e| Sum[Σ]
+  Sum --> PID[离散 PID]
+  PID --> PWM[占空比]
+  PWM --> Motor[电机 + 驱动]
   Motor --> Encoder[编码器测量]
-  Encoder -->|采样| Feedback[量化成 ω_meas]
-  Feedback --> SUM
+  Encoder -->|采样| Feedback[量化测量值]
+  Feedback --> Sum
 ```
 
 ### 核心代码（嵌入式 C，FreeRTOS 或裸机皆可）
@@ -208,6 +208,7 @@ sequenceDiagram
     participant ADC as 传感器/编码器
     participant Ctrl as 控制器
     participant PWM as PWM 驱动
+    participant Motor as 电机
     Timer->>ADC: 读取编码器/测量速度
     ADC->>Ctrl: 提供 meas
     Ctrl->>PWM: 更新占空比

@@ -11,6 +11,12 @@ nav:
       - 第2章 CubeMX编程指南: chapter2.md
       - 第3章 PicSimlab仿真开发: chapter3.md
       - 第4章 嵌入式软件设计模式: chapter4.md
+      - 第5章 Renode 高级仿真编程: chapter5.md
+      - 第6章 嵌入式实时操作系统（FreeRTOS）: chapter6.md
+      - 第7章 STM32 定时器的应用: chapter7.md
+      - 第8章 PWM 波与电机驱动: chapter8.md
+      - 第9章 闭环控制与 PID: chapter9.md
+      - 第10章 嵌入式系统与互联网: chapter10.md
   - 参考资料: resources.md
 theme:
   name: material

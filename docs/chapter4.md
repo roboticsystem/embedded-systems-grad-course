@@ -605,6 +605,7 @@ sequenceDiagram
     participant Main as 主循环
     participant Sensor as 传感器
     participant UART as 串口
+    participant Control as 控制模块
     Main->>Sensor: 定期检查
     Main->>UART: 定期检查
     Main->>Control: 定期执行控制
@@ -677,6 +678,7 @@ sequenceDiagram
     participant IRQ as 硬件中断
     participant ISR as 中断上半部
     participant Task as 下半部任务
+    participant App as 应用模块
     IRQ->>ISR: 中断到达（采集寄存器）
     ISR->>ISR: 快速缓存/记录时间戳
     ISR->>Task: xSemaphoreGiveFromISR()

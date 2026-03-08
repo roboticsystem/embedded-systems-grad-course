@@ -43,9 +43,9 @@ C(s) = K_p + K_i / s + K_d * s
 ```mermaid
 flowchart LR
   E[误差 e(t)] -->|比例| P[Kp*e(t)]
-  E -->|积分| I[K_i * \int e(t) dt]
+  E -->|积分| I[K_i * ∫ e(t) dt]
   E -->|微分| D[K_d * de(t)/dt]
-  P --> SUM
+  P --> SUM[总和]
   I --> SUM
   D --> SUM
   SUM --> U[控制量 u(t)]

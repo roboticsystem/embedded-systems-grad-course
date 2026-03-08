@@ -38,7 +38,7 @@ Mermaid 流程图（表示组件关系，课堂中请配合图像资源）
 ```mermaid
 flowchart LR
   A[RESC / Python Controller] --> B[Renode Core]
-  B --> C{Machine Model}
+  B --> C[Machine Model]
   C --> D[CPU Model]
   C --> E[Peripheral Models]
   C --> F[Bus / Interconnect]
@@ -208,7 +208,7 @@ RESC + Python 混合使用示例伪代码：
 5.5.2 系统架构（图形优先）
 Mermaid 架构图（简化）
 ```mermaid
-graph LR
+flowchart LR
   A[模拟传感器群 (I2C)] -->|I2C| B[MCU (Cortex-M)]
   B -->|UART| C[Serial to TCP Bridge]
   C -->|MQTT| D[MQTT Broker (模拟)]

@@ -144,7 +144,7 @@ skinparam mindmapNodeBorderColor                #90CAF9
 ### 1.2 系统架构
 
 ```mermaid
-graph TB
+flowchart TB
     subgraph "现场设备层"
         S1[温度传感器\nDS18B20]
         S2[湿度传感器\nDHT22]
@@ -174,7 +174,11 @@ graph TB
         Alarm[报警管理]
     end
 
-    S1 & S2 & S3 & S4 & S5 -->|传感器数据| STM32
+    S1 -->|传感器数据| STM32
+    S2 -->|传感器数据| STM32
+    S3 -->|传感器数据| STM32
+    S4 -->|传感器数据| STM32
+    S5 -->|传感器数据| STM32
     STM32 --> RS485
     STM32 --> ETH
     STM32 --> SD
@@ -182,10 +186,16 @@ graph TB
     RS485 --> Modbus
     ETH --> MQTT
     ETH --> OPC
-    Modbus & MQTT & OPC --> Web
-    Modbus & MQTT & OPC --> App
-    Web & App --> DB
-    Web & App --> Alarm
+    Modbus --> Web
+    MQTT --> Web
+    OPC --> Web
+    Modbus --> App
+    MQTT --> App
+    OPC --> App
+    Web --> DB
+    App --> DB
+    Web --> Alarm
+    App --> Alarm
 ```
 
 ### 1.3 核心功能模块

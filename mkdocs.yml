@@ -31,6 +31,8 @@ extra_css:
 extra_javascript:
   - assets/javascripts/exam-login.js
   - assets/javascripts/footer-links.js
+  - https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js
+  - assets/javascripts/mermaid-init.js
 
 plugins:
   - search:
@@ -40,6 +42,7 @@ plugins:
   - mkdocs_quiz
 
 markdown_extensions:
+  - pymdownx.superfences
   - plantuml_markdown:
       server: https://www.plantuml.com/plantuml
       format: png

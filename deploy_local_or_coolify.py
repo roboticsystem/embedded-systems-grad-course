@@ -198,12 +198,43 @@ def start_api_server():
     env.setdefault("JWT_SECRET",       os.environ.get("JWT_SECRET", "local-dev-secret-not-for-production"))
     env.setdefault("DOCS_DIR",         str(REPO_ROOT / "docs"))
     env["PYTHONPATH"] = str(BACKEND_DIR)
-    return subprocess.Popen(
-        [sys.executable, "-m", "uvicorn", "app.main:app",
-         "--host", HOST, "--port", str(API_PORT), "--reload"],
-        cwd=str(BACKEND_DIR),
-        env=env,
-    )
+    # Ensure unbuffered output so logs appear immediately
+    env.setdefault("PYTHONUNBUFFERED", "1")
+
+    # Collect sensible reload directories: backend root, backend/app, docs and repo root
+    reload_dirs = [
+        str(BACKEND_DIR),
+        str(BACKEND_DIR / "app"),
+        str(REPO_ROOT / "docs"),
+        str(REPO_ROOT),
+    ]
+
+    cmd = [
+        sys.executable,
+        "-m",
+        "uvicorn",
+        "app.main:app",
+        "--host",
+        HOST,
+        "--port",
+        str(API_PORT),
+        "--reload",
+    ]
+
+    # Add --reload-dir entries
+    for d in reload_dirs:
+        cmd += ["--reload-dir", d]
+
+    # Also watch common non-.py assets (md, html, css, js)
+    for pat in ("*.py", "*.html", "*.md", "*.css", "*.js"):
+        cmd += ["--reload-include", pat]
+
+    popen_kwargs = dict(cwd=str(BACKEND_DIR), env=env)
+    # On POSIX, start a new process group so we can terminate whole group later
+    if os.name != "nt":
+        popen_kwargs["preexec_fn"] = os.setsid
+
+    return subprocess.Popen(cmd, **popen_kwargs)
 
 
 def serve_local():

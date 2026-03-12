@@ -67,7 +67,7 @@ CONTAINER_FIXED_ENV = {
 def show_menu() -> str:
     print()
     print("╔" + "═" * 53 + "╗")
-    print("║    🤖  机器人系统课程 — 管理工具                   ║")
+    print("║    🤖  《嵌入式系统》课程新教材 — 管理工具                   ║")
     print("╠" + "═" * 53 + "╣")
     print("║  [1]  本地预览   MkDocs + API（热重载）            ║")
     print("║  [2]  远程部署   触发 Coolify 重建                 ║")

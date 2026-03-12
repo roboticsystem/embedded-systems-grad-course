@@ -43,7 +43,7 @@ plugins:
 markdown_extensions:
   - toc:
       permalink: true
-      toc_depth: 4
+      toc_depth: 2-4
   - pymdownx.superfences
   - plantuml_markdown:
       server: https://www.plantuml.com/plantuml

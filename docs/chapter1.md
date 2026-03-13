@@ -583,6 +583,74 @@ Blue Pill 在 PC13 引脚上连接了一颗 LED，是学习 GPIO 控制的第一
 
 ## STM32CubeMX 图形化开发工具
 
+## 使用容器进行 STM32 开发
+
+本文介绍如何使用容器化工具链进行 STM32 嵌入式开发，便于在不同环境中保持一致的编译与调试流程。
+
+### 为什么使用容器
+- 保持可重复的工具链版本（gcc-arm-none-eabi、OpenOCD、stlink 等）。
+- 避免破坏本机环境与依赖冲突。 
+- 方便 CI 集成与团队共享开发环境。
+
+### 准备工作
+1. 安装 Docker（或 podman）。
+2. 将开发板通过 USB（串口或 ST-Link）连接到主机，并确保当前用户有权限访问对应的设备节点（/dev/ttyUSB0、/dev/serial/by-id/*、/dev/bus/usb 等）。
+
+### 基础 Dockerfile 示例
+```dockerfile
+FROM ubuntu:22.04
+RUN apt-get update && apt-get install -y --no-install-recommends \
+  build-essential cmake git ca-certificates wget unzip python3 python3-pip \
+  libusb-1.0-0-dev pkg-config
+# 安装 ARM GCC 工具链（示例：官方发布的 tarball）
+RUN wget -qO /tmp/gcc-arm.tar.bz2 https://developer.arm.com/-/media/Files/downloads/gnu-rm/10-2020q4/gcc-arm-none-eabi-10-2020-q4-major-x86_64-linux.tar.bz2 \
+  && tar -xjf /tmp/gcc-arm.tar.bz2 -C /opt && rm /tmp/gcc-arm.tar.bz2
+ENV PATH="/opt/gcc-arm-none-eabi-10-2020-q4-major/bin:${PATH}"
+# 安装 OpenOCD 与 stlink (也可使用 pip 安装 pyocd 等工具)
+RUN apt-get install -y openocd
+# 工作目录
+WORKDIR /workspace
+CMD ["/bin/bash"]
+```
+
+### 运行容器并访问设备
+- 运行并将项目目录挂载到容器：
+```
+docker run --rm -it \
+  --privileged \
+  -v $(pwd):/workspace \
+  -v /dev:/dev \
+  --workdir /workspace \
+  my-stm32-image:latest
+```
+说明：传递 /dev 或使用 --device /dev/ttyUSB0、--device /dev/bus/usb 等更细粒度的方式，让容器访问物理设备。
+
+### 在容器内构建与烧录
+- 使用 make / cmake 构建：
+```
+mkdir -p build && cd build && cmake .. && make -j
+```
+- 使用 OpenOCD + arm-none-eabi-gdb 或 st-flash 烧录：
+```
+# 使用 stlink-tools（若已安装）
+st-flash write build/firmware.bin 0x8000000
+# 或使用 openocd + gdb:
+openocd -f interface/stlink.cfg -f target/stm32f1x.cfg &
+arm-none-eabi-gdb build/firmware.elf -ex "target remote :3333" -ex "monitor reset halt" -ex "load"
+```
+
+### 用 VS Code Remote - Containers 集成开发
+- 在项目根创建 .devcontainer/devcontainer.json，指定基于上面 Dockerfile 的开发容器。
+- 使用 "Remote - Containers" 插件打开容器后，可直接在容器内编译与调试，IDE 会使用容器中的工具链。
+
+### 常见问题与注意事项
+- 设备权限不足：可将用户加入 dialout 组或在运行容器时使用 --device/--privileged。注意安全性。 
+- ST-Link 固件或驱动冲突：主机上占用设备的进程（如 ModemManager）可能需要停用。 
+- 在 CI 中使用容器时，请不要挂载 /dev，改用基于仿真或测试固件的集成测试方案。
+
+> 小结：容器化 STM32 开发能显著提升可重复性与团队合作效率。建议将常用镜像与脚本纳入项目仓库，以便新成员快速上手。
+
+
 ### 工具概述
 
 **STM32CubeMX** 是 ST（意法半导体）官方推出的**图形化初始化代码生成工具**，是 STM32 生态的核心组成部分。它将繁琐的芯片初始化配置（时钟树、引脚模式、外设参数）转变为**可视化的鼠标点选操作**，并自动生成完整的 HAL 库初始化代码框架，极大地降低了 STM32 开发的入门门槛。

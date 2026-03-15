@@ -138,14 +138,79 @@ flowchart LR
 
 ## 6.5 内存管理机制
 
-- FreeRTOS 提供多种 heap 实现（heap_1 到 heap_5），分别适配不同的需求：
-  - heap_1：简单的静态分配，无释放（适合静态系统）。
-  - heap_2：简单堆分配，支持释放，但非线程安全。 (注：早期版本)
-  - heap_3：封装 libc malloc/free（依赖平台实现）。
-  - heap_4：内存合并算法，支持碎片整理与释放，常用。
-  - heap_5：支持多个内存区域，适合非连续内存区域的系统。
+FreeRTOS 提供多种 heap 实现（heap_1 到 heap_5），分别适配不同的需求。选择合适的内存管理方案对系统实时性和可靠性至关重要。
 
-- 实时性考虑：动态内存分配可能带来不可预测的抖动，建议对关键路径使用静态/预分配策略或选择确定性较好的 heap 实现。
+### 6.5.1 各 heap 实现详细对比
+
+| 实现 | 分配 | 释放 | 合并碎片 | 确定性 | 适用场景 |
+|---|---|---|---|---|---|
+| heap_1 | ✅ (简单递增) | ❌ | — | 最高 | 系统启动时一次性分配所有任务和队列，运行期间不释放 |
+| heap_2 | ✅ (最佳匹配) | ✅ | ❌ | 中等 | 频繁分配/释放相同大小的块 |
+| heap_3 | ✅ (libc malloc) | ✅ (libc free) | 取决于 libc | 最低 | 已有可靠 libc 实现的平台 |
+| heap_4 | ✅ (首次匹配) | ✅ | ✅ | 较高 | 最常用，通用场景 |
+| heap_5 | ✅ (首次匹配) | ✅ | ✅ | 较高 | 非连续内存区域（如内部 RAM + 外部 SRAM） |
+
+### 6.5.2 heap_4 内存合并机制
+
+heap_4 在释放内存块时会检查相邻空闲块并合并，减少碎片：
+
+```text
+释放前：                          释放后（合并）：
+┌──────┬──────┬──────┬──────┐   ┌──────┬───────────────┬──────┐
+│已用A │空闲  │已用B │空闲  │   │已用A │   合并空闲    │空闲  │
+└──────┴──────┴──────┴──────┘   └──────┴───────────────┴──────┘
+                释放B ──────────►
+```
+
+### 6.5.3 heap_5 多区域配置示例
+
+```c
+/* 定义两个内存区域 */
+const HeapRegion_t xHeapRegions[] = {
+    { (uint8_t *)0x20000000, 0x10000 },  // 内部 SRAM: 64KB
+    { (uint8_t *)0x60000000, 0x40000 },  // 外部 SRAM: 256KB
+    { NULL, 0 }                           // 终止标记
+};
+
+void main(void) {
+    /* 必须在任何 FreeRTOS API 调用之前初始化 */
+    vPortDefineHeapRegions(xHeapRegions);
+    /* ... 其他初始化 ... */
+}
+```
+
+### 6.5.4 内存使用监控
+
+```c
+/* 查询剩余堆空间 */
+size_t free_heap = xPortGetFreeHeapSize();
+
+/* 查询历史最小剩余堆空间（水位线） */
+size_t min_ever = xPortGetMinimumEverFreeHeapSize();
+
+/* 查询特定任务的栈剩余 */
+UBaseType_t stack_hwm = uxTaskGetStackHighWaterMark(xTaskHandle);
+```
+
+### 6.5.5 实时性考虑
+
+- 动态内存分配可能带来不可预测的抖动；建议对关键路径使用静态/预分配策略。
+- FreeRTOS v10+ 支持 **静态分配 API**（`xTaskCreateStatic`、`xQueueCreateStatic` 等），完全避免运行期 heap 操作：
+
+```c
+static StaticTask_t xTaskBuffer;
+static StackType_t xStack[256];
+
+TaskHandle_t xHandle = xTaskCreateStatic(
+    vMyTask,          // 任务函数
+    "StaticTask",     // 名称
+    256,              // 栈大小
+    NULL,             // 参数
+    2,                // 优先级
+    xStack,           // 栈缓冲区
+    &xTaskBuffer      // TCB 缓冲区
+);
+```
 
 ---
 
@@ -175,15 +240,54 @@ sequenceDiagram
 
 ## 6.7 移植层与配置要点（FreeRTOSConfig.h）
 
-- 关键宏说明（示例）：
-  - configUSE_PREEMPTION：是否启用抢占。
-  - configUSE_TIME_SLICING：同优先级时间片开关。
-  - configCPU_CLOCK_HZ、configTICK_RATE_HZ：时钟与 Tick 配置。
-  - configMINIMAL_STACK_SIZE：默认最小任务栈。
-  - configTOTAL_HEAP_SIZE：若使用内部 heap 实现则定义堆大小。
-  - configUSE_MUTEXES、configUSE_COUNTING_SEMAPHORES、configUSE_TIMERS 等用于启用内核特性。
+### 6.7.1 关键配置宏详解
 
-- 移植层（port.c/portmacro.h）需实现从硬件角度的上下文切换、临界区管理与 Tick 中断处理，移植时需关注编译器寄存器约定与中断入口/退出序列。
+| 宏名 | 典型值 | 说明 |
+|---|---|---|
+| `configUSE_PREEMPTION` | 1 | 抢占式调度（0=协作式） |
+| `configUSE_TIME_SLICING` | 1 | 同优先级时间片轮转 |
+| `configCPU_CLOCK_HZ` | 168000000 | CPU 主频（Hz） |
+| `configTICK_RATE_HZ` | 1000 | 系统 Tick 频率（1ms/tick） |
+| `configMINIMAL_STACK_SIZE` | 128 | 最小任务栈（单位：字） |
+| `configTOTAL_HEAP_SIZE` | 32768 | 堆总大小（字节） |
+| `configMAX_PRIORITIES` | 16 | 最大优先级数 |
+| `configUSE_MUTEXES` | 1 | 启用互斥量 |
+| `configUSE_COUNTING_SEMAPHORES` | 1 | 启用计数信号量 |
+| `configUSE_TIMERS` | 1 | 启用软件定时器 |
+| `configCHECK_FOR_STACK_OVERFLOW` | 2 | 栈溢出检查方法（0=关闭，1=快速，2=全面） |
+| `configUSE_TICKLESS_IDLE` | 0/1 | Tickless 低功耗模式 |
+| `configGENERATE_RUN_TIME_STATS` | 0/1 | 运行时间统计 |
+
+### 6.7.2 Tick 频率选择
+
+| Tick 频率 | 最小延时分辨率 | CPU 开销 | 适用场景 |
+|---|---|---|---|
+| 100 Hz | 10 ms | 极低 | 低功耗、对实时性要求不高 |
+| 1000 Hz | 1 ms | 低 | 通用嵌入式（最常用） |
+| 10000 Hz | 0.1 ms | 中等 | 高精度实时控制 |
+
+### 6.7.3 移植层实现要点
+
+移植层（`port.c` / `portmacro.h`）需实现从硬件角度的上下文切换、临界区管理与 Tick 中断处理。
+
+Cortex-M 架构的关键移植点：
+- **PendSV 中断**：用于上下文切换（最低优先级，确保在所有 ISR 完成后才切换）；
+- **SysTick 中断**：产生系统 Tick 心跳；
+- **临界区**：通过 `BASEPRI` 寄存器屏蔽不高于特定优先级的中断（而非全局关中断），保证高优先级中断仍可响应。
+
+```mermaid
+sequenceDiagram
+    participant App as 应用任务
+    participant Kernel as FreeRTOS 内核
+    participant PendSV as PendSV ISR
+    participant SysTick as SysTick ISR
+    SysTick->>Kernel: xTaskIncrementTick()
+    Kernel->>Kernel: 检查是否需要切换
+    Kernel->>PendSV: 置位 PendSV
+    PendSV->>PendSV: 保存当前任务上下文
+    PendSV->>PendSV: 恢复新任务上下文
+    PendSV->>App: 切换到新任务
+```
 
 ---
 

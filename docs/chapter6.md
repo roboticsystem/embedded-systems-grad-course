@@ -1,4 +1,8 @@
-# 1 第6章 嵌入式实时操作系统 — FreeRTOS
+---
+number headings: first-level 2, start-at 6
+---
+
+## 6 第6章 嵌入式实时操作系统 — FreeRTOS
 
 本章核心内容：嵌入式实时操作系统（RTOS）概念、FreeRTOS 内核架构与组件、任务调度原理、进程间通信与同步、内存管理策略、中断与 ISR 安全 API、移植与配置、调试与性能分析，以及基于 FreeRTOS 的工程实例。目标读者为研究生，要求具备嵌入式系统基础（C 语言、MCU 架构）并能够在此基础上掌握 RTOS 的设计思想与工程实现能力。
 
@@ -17,19 +21,19 @@
 
 ---
 
-## 1.1 实时操作系统与 FreeRTOS 概述
+### 6.1 实时操作系统与 FreeRTOS 概述
 
 - 实时操作系统（RTOS）在嵌入式系统中的定位：保证任务在确定的时间约束内完成；区别于通用操作系统的调度目标与资源管理策略。
 - FreeRTOS 是一个轻量级、可移植、开源（MIT 许可）的嵌入式 RTOS，广泛用于工业控制、物联网终端、消费电子及车载子系统等场景。
 
-### 1.1.1 FreeRTOS 的设计目标与应用场景
+#### 6.1.1 FreeRTOS 的设计目标与应用场景
 
 - 设计目标：最小化内核开销、可裁剪性、高可移植性、确定性（低抖动）。
 - 适用场景示例：边缘传感器网关（低功耗实时采样）、运动控制闭环（严格周期性控制）、车载 ECUs（任务隔离与故障控制）等。
 
 ---
 
-## 1.2 FreeRTOS 内核架构与主要对象
+### 6.2 FreeRTOS 内核架构与主要对象
 
 图形优先：下图为简化的 FreeRTOS 内核组件交互图。
 
@@ -53,7 +57,7 @@ flowchart LR
 ```
 
 
-### 1.2.1 关键对象与作用（图形 + 文字）
+#### 6.2.1 关键对象与作用（图形 + 文字）
 
 - 任务（Task / Thread）：执行上下文单元，包含栈、寄存器保存区、控制块（TCB）。
 - 调度器（Scheduler）：基于优先级的抢占式或协作式调度；Tick 中断触发心跳（除 Tickless 模式）。
@@ -65,9 +69,9 @@ flowchart LR
 
 ---
 
-## 1.3 任务与调度策略
+### 6.3 任务与调度策略
 
-### 1.3.1 调度模型
+#### 6.3.1 调度模型
 
 - 抢占式优先级调度（Preemptive Priority Scheduling）：常用配置，具有快速响应高优先级任务的能力。
 - 协作式调度（Cooperative / Non-preemptive）：通过任务显式放弃 CPU 实现切换，适合简单软实时场景。
@@ -87,7 +91,7 @@ sequenceDiagram
     T2-->>T1: 上下文切换
 ```
 
-### 1.3.2 优先级设计与优先级反转
+#### 6.3.2 优先级设计与优先级反转
 
 - 优先级设计原则：按响应时延/功能关键性划分优先级；避免所有临界段阻塞高优先级任务。
 - 优先级反转问题：低优先级任务持有互斥资源阻塞高优先级任务，若中优先级任务抢占，导致高优先级长期等待。
@@ -103,7 +107,7 @@ sequenceDiagram
 
 ---
 
-## 1.4 任务间通信与同步
+### 6.4 任务间通信与同步
 
 图形优先：通信/同步对象及其关系示意图
 
@@ -118,12 +122,12 @@ flowchart LR
   TaskC -->|xEventGroupWaitBits| EventGroup
 ```
 
-### 1.4.1 队列（Queue）
+#### 6.4.1 队列（Queue）
 
 - 用法：用于字节、结构体或指针的安全传递；FIFO 顺序保证。
 - 性能注意：队列拷贝开销（配置项可使用指针传递减少拷贝），深度与元素大小影响内存消耗。
 
-### 1.4.2 信号量与互斥量
+#### 6.4.2 信号量与互斥量
 
 - 二值信号量（Binary Semaphore）：事件通知语义。
 - 互斥量（Mutex）：带优先级继承，用于保护短临界段。
@@ -138,7 +142,7 @@ flowchart LR
 
 ---
 
-## 1.5 内存管理机制
+### 6.5 内存管理机制
 
 - FreeRTOS 提供多种 heap 实现（heap_1 到 heap_5），分别适配不同的需求：
   - heap_1：简单的静态分配，无释放（适合静态系统）。
@@ -151,7 +155,7 @@ flowchart LR
 
 ---
 
-## 1.6 中断与 ISR 安全 API
+### 6.6 中断与 ISR 安全 API
 
 - 在中断上下文调用 RTOS API 时，必须使用 FromISR 后缀的接口（如 xQueueSendFromISR、xSemaphoreGiveFromISR）以保证中断安全性；并在需要时使用 portYIELD_FROM_ISR 或宏触发上下文切换。
 
@@ -175,7 +179,7 @@ sequenceDiagram
 
 ---
 
-## 1.7 移植层与配置要点（FreeRTOSConfig.h）
+### 6.7 移植层与配置要点（FreeRTOSConfig.h）
 
 - 关键宏说明（示例）：
   - configUSE_PREEMPTION：是否启用抢占。
@@ -189,7 +193,7 @@ sequenceDiagram
 
 ---
 
-## 1.8 调试、追踪与性能分析
+### 6.8 调试、追踪与性能分析
 
 - 软件追踪：FreeRTOS 提供 trace宏（configUSE_TRACE_FACILITY）与 run-time stats（configGENERATE_RUN_TIME_STATS）用于任务运行时间统计。
 - 第三方工具：FreeRTOS+Trace、Segger SystemView 等可以进行高精度的时序采样和可视化分析。
@@ -197,15 +201,15 @@ sequenceDiagram
 
 ---
 
-## 1.9 工程实例：基于 FreeRTOS 的低功耗传感器网关（Cortex-M）
+### 6.9 工程实例：基于 FreeRTOS 的低功耗传感器网关（Cortex-M）
 
-### 1.9.1 实例背景
+#### 6.9.1 实例背景
 
 场景：物联网边缘节点采集多路传感器数据，做本地预处理并通过串口/无线模块上报到网关。要求：周期性采样、实时事件（外部中断）响应、最低化睡眠功耗。
 
 工程价值：展示任务划分、互斥/队列通信、ISR 与任务交互、软件定时器与低功耗（Tickless）策略的综合应用。
 
-### 1.9.2 系统架构（简化）
+#### 6.9.2 系统架构（简化）
 
 ```mermaid
 flowchart LR
@@ -221,7 +225,7 @@ flowchart LR
   UART_ISR -->|xQueueSendFromISR| RxQ
 ```
 
-### 1.9.3 核心流程与关键代码片段（精简、可运行风格）
+#### 6.9.3 核心流程与关键代码片段（精简、可运行风格）
 
 说明：以下代码为核心片段，省略硬件初始化细节，仅示范任务、队列、ISR 与通信。
 
@@ -333,14 +337,14 @@ sequenceDiagram
 
 ---
 
-## 1.10 本章小结
+### 6.10 本章小结
 
 - FreeRTOS 提供了轻量、可移植且工程化的实时内核，适合资源受限的嵌入式实时系统。核心技能包括任务划分与优先级设计、线程安全的通信同步、ISR 与任务的协同、以及合理的内存分配策略。
 - 工程实现中需关注优先级反转、内存碎片、ISR 执行时间以及调试/追踪策略，以保证系统的确定性与可靠性。
 
 ---
 
-## 1.11 参考资料与延伸阅读
+### 6.11 参考资料与延伸阅读
 
 - FreeRTOS 官方文档与 API 参考（https://www.freertos.org）
 - Real Time Concepts for Embedded Systems — Qing Li（参考实时系统理论）
@@ -348,7 +352,7 @@ sequenceDiagram
 
 ---
 
-## 1.12 本章测验
+### 6.12 本章测验
 
 <div id="exam-meta" data-exam-id="chapter6" data-exam-title="第六章 FreeRTOS实时操作系统测验" style="display:none"></div>
 

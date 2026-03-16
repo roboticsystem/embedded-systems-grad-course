@@ -29,32 +29,12 @@
 
 ## 10.2 WiFi 应用实践（连接、DHCP、mDNS）
 
-### 10.2.1 WiFi 连接管理
+关键点：
+- 建立稳定的 WiFi STA 连接，处理断连重连策略（指数退避、最大重试次数）；
+- 使用 mDNS/UPnP 简化局域网内设备发现；
+- 使用 DHCP 静态租约或静态 IP（对远程访问有帮助，但不能穿透 NAT 本质）。
 
-嵌入式设备的 WiFi 连接必须考虑网络不稳定性。稳健的连接管理包括：
-
-**连接状态机**：
-
-```mermaid
-stateDiagram-v2
-    [*] --> DISCONNECTED
-    DISCONNECTED --> CONNECTING : WiFi.begin()
-    CONNECTING --> CONNECTED : 收到 IP
-    CONNECTING --> DISCONNECTED : 超时
-    CONNECTED --> DISCONNECTED : 连接丢失
-    DISCONNECTED --> CONNECTING : 重连（指数退避）
-```
-
-**关键策略**：
-
-| 策略 | 描述 | 配置建议 |
-|---|---|---|
-| 指数退避重连 | 每次失败后翻倍等待时间 | 初始 1s，最大 60s |
-| 最大重试次数 | 连续失败 N 次后重启 WiFi 模块 | N = 10~20 |
-| mDNS 注册 | 局域网内设备发现 | `esp-device.local` |
-| 静态 IP（可选） | 避免 DHCP 延迟 | 适合固定部署场景 |
-
-### 10.2.2 示意代码（带指数退避的 WiFi 连接管理）
+示意代码（ESP8266 Arduino WiFiSTA）:
 
 ```cpp
 #include <ESP8266WiFi.h>
@@ -62,80 +42,28 @@ stateDiagram-v2
 const char* ssid = "ssid";
 const char* pass = "password";
 
-uint32_t reconnect_delay = 1000;  // 初始退避 1s
-const uint32_t MAX_DELAY = 60000; // 最大退避 60s
-uint8_t retry_count = 0;
-const uint8_t MAX_RETRIES = 20;
+void setup() {
+  Serial.begin(115200);
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(ssid, pass);
+  unsigned long t0 = millis();
+  while (WiFi.status() != WL_CONNECTED && millis() - t0 < 10000) {
+    delay(200);
+    Serial.print('.');
+  }
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.println(WiFi.localIP());
+  }
+}
 
-void wifi_connect() {
-    WiFi.mode(WIFI_STA);
+void loop() {
+  if (WiFi.status() != WL_CONNECTED) {
+    // 简单重连策略
+    WiFi.disconnect();
     WiFi.begin(ssid, pass);
-    unsigned long t0 = millis();
-    while (WiFi.status() != WL_CONNECTED && millis() - t0 < 10000) {
-        delay(200);
-        Serial.print('.');
-    }
-    if (WiFi.status() == WL_CONNECTED) {
-        Serial.println(WiFi.localIP());
-        reconnect_delay = 1000;  // 重置退避
-        retry_count = 0;
-    } else {
-        retry_count++;
-        if (retry_count >= MAX_RETRIES) {
-            ESP.restart();  // 硬重启
-        }
-    }
-}
-
-void loop() {
-    if (WiFi.status() != WL_CONNECTED) {
-        WiFi.disconnect();
-        delay(reconnect_delay);
-        wifi_connect();
-        // 指数退避
-        reconnect_delay = min(reconnect_delay * 2, MAX_DELAY);
-    }
-    // 业务逻辑
-}
-```
-
-### 10.2.3 mDNS 设备发现
-
-mDNS 允许局域网内设备通过 `.local` 域名被发现，无需知道 IP：
-
-```cpp
-#include <ESP8266mDNS.h>
-
-void setup() {
-    // WiFi 连接完成后...
-    if (MDNS.begin("esp-sensor")) {
-        Serial.println("mDNS: esp-sensor.local");
-        MDNS.addService("http", "tcp", 80);  // 注册 HTTP 服务
-    }
-}
-```
-
-### 10.2.4 HTTP 服务器与 RESTful API
-
-ESP8266/ESP32 可作为轻量 HTTP 服务器，提供 RESTful 接口用于配置和数据查询：
-
-```cpp
-#include <ESP8266WebServer.h>
-ESP8266WebServer server(80);
-
-void handleGetStatus() {
-    String json = "{\"temperature\": 25.3, \"humidity\": 60}";
-    server.send(200, "application/json", json);
-}
-
-void setup() {
-    // WiFi 连接完成后...
-    server.on("/api/status", HTTP_GET, handleGetStatus);
-    server.begin();
-}
-
-void loop() {
-    server.handleClient();
+    delay(1000);
+  }
+  // 业务逻辑
 }
 ```
 
@@ -143,96 +71,23 @@ void loop() {
 
 ## 10.3 蓝牙应用简介（ESP32）
 
-### 10.3.1 BLE 与 Classic Bluetooth 对比
+关键点：
+- ESP32 支持 BLE GATT 服务与 Classic SPP；研究生需理解 BLE 的低功耗连接模型与 ATT/GATT 抽象；
+- 在嵌入式设计中，常用 BLE 作为短距离配置/调试通道（如 WiFi 配置）或低速传输数据。 
 
-| 特性 | BLE (低功耗蓝牙) | Classic Bluetooth (SPP) |
-|---|---|---|
-| 功耗 | 极低（μA 级待机） | 较高 |
-| 传输速率 | 低（几十 KB/s） | 高（几 MB/s） |
-| 连接时间 | 快（ms 级） | 慢（秒级） |
-| 适用场景 | 传感器数据、设备配置、信标 | 音频传输、大量数据串口透传 |
-| 通信模型 | GATT（属性/服务/特征） | SPP（虚拟串口） |
-
-ESP32 同时支持 BLE 和 Classic，但通常不建议同时启用两者（内存与功耗开销大）。
-
-### 10.3.2 BLE GATT 架构
-
-```mermaid
-flowchart TD
-    Profile[Profile 配置文件]
-    Profile --> Service1[服务 1: 环境传感器]
-    Profile --> Service2[服务 2: 设备信息]
-    Service1 --> Char1[特征: 温度]
-    Service1 --> Char2[特征: 湿度]
-    Service2 --> Char3[特征: 设备名称]
-    Service2 --> Char4[特征: 固件版本]
-    Char1 --> Desc1[描述符: CCCD]
-    Char2 --> Desc2[描述符: CCCD]
-```
-
-- **服务（Service）**：功能的逻辑分组，用 UUID 标识；
-- **特征（Characteristic）**：服务中的数据项，支持读/写/通知；
-- **描述符（Descriptor）**：特征的元数据，如 CCCD（客户端特征配置描述符）用于启用通知。
-
-### 10.3.3 BLE GATT 交互时序
+示意：BLE 广告与 GATT 服务交互（Mermaid）
 
 ```mermaid
 sequenceDiagram
-    participant P as ESP32 (Peripheral)
-    participant C as 手机/App (Central)
-    P->>C: 广播广告 (Adv)
-    C->>P: 连接请求
-    C->>P: 发现服务 (GATT Discovery)
-    C->>P: 读特征 -> 获取温度值
-    C->>P: 写特征 -> 配置 WiFi SSID/密码
-    P-->>C: 通知 -> 温度变化推送
-    Note over P,C: 断开后可重新广播
+  participant Peripheral as ESP32 (Peripheral)
+  participant Central as 手机/App (Central)
+  Peripheral->>Central: 广播广告 (Adv)
+  Central->>Peripheral: 连接请求
+  Central->>Peripheral: 发现服务 (GATT Discovery)
+  Central->>Peripheral: 写特征 -> 配置 WiFi
 ```
 
-### 10.3.4 BLE 配网实践
-
-常见场景：ESP32 首次上电时没有 WiFi 配置，通过 BLE 接收手机 App 发送的 WiFi SSID 和密码：
-
-```cpp
-#include <BLEDevice.h>
-#include <BLEServer.h>
-#include <BLEUtils.h>
-#include <BLE2902.h>
-
-#define SERVICE_UUID        "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
-#define WIFI_SSID_CHAR_UUID "beb5483e-36e1-4688-b7f5-ea07361b26a8"
-#define WIFI_PASS_CHAR_UUID "beb5483f-36e1-4688-b7f5-ea07361b26a8"
-
-class WiFiConfigCallback : public BLECharacteristicCallbacks {
-    void onWrite(BLECharacteristic *pChar) override {
-        std::string value = pChar->getValue();
-        if (pChar->getUUID().toString() == WIFI_SSID_CHAR_UUID) {
-            // 保存 SSID 到 NVS
-        } else if (pChar->getUUID().toString() == WIFI_PASS_CHAR_UUID) {
-            // 保存密码到 NVS 并触发 WiFi 连接
-        }
-    }
-};
-
-void setup_ble() {
-    BLEDevice::init("ESP32-Config");
-    BLEServer *pServer = BLEDevice::createServer();
-    BLEService *pService = pServer->createService(SERVICE_UUID);
-
-    BLECharacteristic *pSSID = pService->createCharacteristic(
-        WIFI_SSID_CHAR_UUID, BLECharacteristic::PROPERTY_WRITE);
-    BLECharacteristic *pPass = pService->createCharacteristic(
-        WIFI_PASS_CHAR_UUID, BLECharacteristic::PROPERTY_WRITE);
-
-    pSSID->setCallbacks(new WiFiConfigCallback());
-    pPass->setCallbacks(new WiFiConfigCallback());
-
-    pService->start();
-    pServer->getAdvertising()->start();
-}
-```
-
-代码提示：实现时推荐使用 ESP-IDF 提供的 NimBLE/GATTS 示例，关注回连与断开处理、MTU 协商及安全配对策略（建议使用 Passkey 或 OOB 配对以防止中间人攻击）。
+代码提示（ESP-IDF/NimBLE）: 实现时推荐使用 ESP-IDF 提供的 NimBLE/GATTS 示例，关注回连与断开处理、MTU 协商及安全配对策略。
 
 ---
 

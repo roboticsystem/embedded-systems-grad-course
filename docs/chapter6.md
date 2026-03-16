@@ -1,4 +1,4 @@
-# 第6章 嵌入式实时操作系统 — FreeRTOS
+# 1 第6章 嵌入式实时操作系统 — FreeRTOS
 
 本章核心内容：嵌入式实时操作系统（RTOS）概念、FreeRTOS 内核架构与组件、任务调度原理、进程间通信与同步、内存管理策略、中断与 ISR 安全 API、移植与配置、调试与性能分析，以及基于 FreeRTOS 的工程实例。目标读者为研究生，要求具备嵌入式系统基础（C 语言、MCU 架构）并能够在此基础上掌握 RTOS 的设计思想与工程实现能力。
 
@@ -17,21 +17,22 @@
 
 ---
 
-## 6.1 实时操作系统与 FreeRTOS 概述
+## 1.1 实时操作系统与 FreeRTOS 概述
 
 - 实时操作系统（RTOS）在嵌入式系统中的定位：保证任务在确定的时间约束内完成；区别于通用操作系统的调度目标与资源管理策略。
 - FreeRTOS 是一个轻量级、可移植、开源（MIT 许可）的嵌入式 RTOS，广泛用于工业控制、物联网终端、消费电子及车载子系统等场景。
 
-### 6.1.1 FreeRTOS 的设计目标与应用场景
+### 1.1.1 FreeRTOS 的设计目标与应用场景
 
 - 设计目标：最小化内核开销、可裁剪性、高可移植性、确定性（低抖动）。
 - 适用场景示例：边缘传感器网关（低功耗实时采样）、运动控制闭环（严格周期性控制）、车载 ECUs（任务隔离与故障控制）等。
 
 ---
 
-## 6.2 FreeRTOS 内核架构与主要对象
+## 1.2 FreeRTOS 内核架构与主要对象
 
 图形优先：下图为简化的 FreeRTOS 内核组件交互图。
+
 
 ```mermaid
 flowchart LR
@@ -51,7 +52,8 @@ flowchart LR
   Application --> Task
 ```
 
-### 6.2.1 关键对象与作用（图形 + 文字）
+
+### 1.2.1 关键对象与作用（图形 + 文字）
 
 - 任务（Task / Thread）：执行上下文单元，包含栈、寄存器保存区、控制块（TCB）。
 - 调度器（Scheduler）：基于优先级的抢占式或协作式调度；Tick 中断触发心跳（除 Tickless 模式）。
@@ -63,9 +65,9 @@ flowchart LR
 
 ---
 
-## 6.3 任务与调度策略
+## 1.3 任务与调度策略
 
-### 6.3.1 调度模型
+### 1.3.1 调度模型
 
 - 抢占式优先级调度（Preemptive Priority Scheduling）：常用配置，具有快速响应高优先级任务的能力。
 - 协作式调度（Cooperative / Non-preemptive）：通过任务显式放弃 CPU 实现切换，适合简单软实时场景。
@@ -85,7 +87,7 @@ sequenceDiagram
     T2-->>T1: 上下文切换
 ```
 
-### 6.3.2 优先级设计与优先级反转
+### 1.3.2 优先级设计与优先级反转
 
 - 优先级设计原则：按响应时延/功能关键性划分优先级；避免所有临界段阻塞高优先级任务。
 - 优先级反转问题：低优先级任务持有互斥资源阻塞高优先级任务，若中优先级任务抢占，导致高优先级长期等待。
@@ -101,7 +103,7 @@ sequenceDiagram
 
 ---
 
-## 6.4 任务间通信与同步
+## 1.4 任务间通信与同步
 
 图形优先：通信/同步对象及其关系示意图
 
@@ -116,12 +118,12 @@ flowchart LR
   TaskC -->|xEventGroupWaitBits| EventGroup
 ```
 
-### 6.4.1 队列（Queue）
+### 1.4.1 队列（Queue）
 
 - 用法：用于字节、结构体或指针的安全传递；FIFO 顺序保证。
 - 性能注意：队列拷贝开销（配置项可使用指针传递减少拷贝），深度与元素大小影响内存消耗。
 
-### 6.4.2 信号量与互斥量
+### 1.4.2 信号量与互斥量
 
 - 二值信号量（Binary Semaphore）：事件通知语义。
 - 互斥量（Mutex）：带优先级继承，用于保护短临界段。
@@ -136,85 +138,20 @@ flowchart LR
 
 ---
 
-## 6.5 内存管理机制
+## 1.5 内存管理机制
 
-FreeRTOS 提供多种 heap 实现（heap_1 到 heap_5），分别适配不同的需求。选择合适的内存管理方案对系统实时性和可靠性至关重要。
+- FreeRTOS 提供多种 heap 实现（heap_1 到 heap_5），分别适配不同的需求：
+  - heap_1：简单的静态分配，无释放（适合静态系统）。
+  - heap_2：简单堆分配，支持释放，但非线程安全。 (注：早期版本)
+  - heap_3：封装 libc malloc/free（依赖平台实现）。
+  - heap_4：内存合并算法，支持碎片整理与释放，常用。
+  - heap_5：支持多个内存区域，适合非连续内存区域的系统。
 
-### 6.5.1 各 heap 实现详细对比
-
-| 实现 | 分配 | 释放 | 合并碎片 | 确定性 | 适用场景 |
-|---|---|---|---|---|---|
-| heap_1 | ✅ (简单递增) | ❌ | — | 最高 | 系统启动时一次性分配所有任务和队列，运行期间不释放 |
-| heap_2 | ✅ (最佳匹配) | ✅ | ❌ | 中等 | 频繁分配/释放相同大小的块 |
-| heap_3 | ✅ (libc malloc) | ✅ (libc free) | 取决于 libc | 最低 | 已有可靠 libc 实现的平台 |
-| heap_4 | ✅ (首次匹配) | ✅ | ✅ | 较高 | 最常用，通用场景 |
-| heap_5 | ✅ (首次匹配) | ✅ | ✅ | 较高 | 非连续内存区域（如内部 RAM + 外部 SRAM） |
-
-### 6.5.2 heap_4 内存合并机制
-
-heap_4 在释放内存块时会检查相邻空闲块并合并，减少碎片：
-
-```text
-释放前：                          释放后（合并）：
-┌──────┬──────┬──────┬──────┐   ┌──────┬───────────────┬──────┐
-│已用A │空闲  │已用B │空闲  │   │已用A │   合并空闲    │空闲  │
-└──────┴──────┴──────┴──────┘   └──────┴───────────────┴──────┘
-                释放B ──────────►
-```
-
-### 6.5.3 heap_5 多区域配置示例
-
-```c
-/* 定义两个内存区域 */
-const HeapRegion_t xHeapRegions[] = {
-    { (uint8_t *)0x20000000, 0x10000 },  // 内部 SRAM: 64KB
-    { (uint8_t *)0x60000000, 0x40000 },  // 外部 SRAM: 256KB
-    { NULL, 0 }                           // 终止标记
-};
-
-void main(void) {
-    /* 必须在任何 FreeRTOS API 调用之前初始化 */
-    vPortDefineHeapRegions(xHeapRegions);
-    /* ... 其他初始化 ... */
-}
-```
-
-### 6.5.4 内存使用监控
-
-```c
-/* 查询剩余堆空间 */
-size_t free_heap = xPortGetFreeHeapSize();
-
-/* 查询历史最小剩余堆空间（水位线） */
-size_t min_ever = xPortGetMinimumEverFreeHeapSize();
-
-/* 查询特定任务的栈剩余 */
-UBaseType_t stack_hwm = uxTaskGetStackHighWaterMark(xTaskHandle);
-```
-
-### 6.5.5 实时性考虑
-
-- 动态内存分配可能带来不可预测的抖动；建议对关键路径使用静态/预分配策略。
-- FreeRTOS v10+ 支持 **静态分配 API**（`xTaskCreateStatic`、`xQueueCreateStatic` 等），完全避免运行期 heap 操作：
-
-```c
-static StaticTask_t xTaskBuffer;
-static StackType_t xStack[256];
-
-TaskHandle_t xHandle = xTaskCreateStatic(
-    vMyTask,          // 任务函数
-    "StaticTask",     // 名称
-    256,              // 栈大小
-    NULL,             // 参数
-    2,                // 优先级
-    xStack,           // 栈缓冲区
-    &xTaskBuffer      // TCB 缓冲区
-);
-```
+- 实时性考虑：动态内存分配可能带来不可预测的抖动，建议对关键路径使用静态/预分配策略或选择确定性较好的 heap 实现。
 
 ---
 
-## 6.6 中断与 ISR 安全 API
+## 1.6 中断与 ISR 安全 API
 
 - 在中断上下文调用 RTOS API 时，必须使用 FromISR 后缀的接口（如 xQueueSendFromISR、xSemaphoreGiveFromISR）以保证中断安全性；并在需要时使用 portYIELD_FROM_ISR 或宏触发上下文切换。
 
@@ -238,60 +175,21 @@ sequenceDiagram
 
 ---
 
-## 6.7 移植层与配置要点（FreeRTOSConfig.h）
+## 1.7 移植层与配置要点（FreeRTOSConfig.h）
 
-### 6.7.1 关键配置宏详解
+- 关键宏说明（示例）：
+  - configUSE_PREEMPTION：是否启用抢占。
+  - configUSE_TIME_SLICING：同优先级时间片开关。
+  - configCPU_CLOCK_HZ、configTICK_RATE_HZ：时钟与 Tick 配置。
+  - configMINIMAL_STACK_SIZE：默认最小任务栈。
+  - configTOTAL_HEAP_SIZE：若使用内部 heap 实现则定义堆大小。
+  - configUSE_MUTEXES、configUSE_COUNTING_SEMAPHORES、configUSE_TIMERS 等用于启用内核特性。
 
-| 宏名 | 典型值 | 说明 |
-|---|---|---|
-| `configUSE_PREEMPTION` | 1 | 抢占式调度（0=协作式） |
-| `configUSE_TIME_SLICING` | 1 | 同优先级时间片轮转 |
-| `configCPU_CLOCK_HZ` | 168000000 | CPU 主频（Hz） |
-| `configTICK_RATE_HZ` | 1000 | 系统 Tick 频率（1ms/tick） |
-| `configMINIMAL_STACK_SIZE` | 128 | 最小任务栈（单位：字） |
-| `configTOTAL_HEAP_SIZE` | 32768 | 堆总大小（字节） |
-| `configMAX_PRIORITIES` | 16 | 最大优先级数 |
-| `configUSE_MUTEXES` | 1 | 启用互斥量 |
-| `configUSE_COUNTING_SEMAPHORES` | 1 | 启用计数信号量 |
-| `configUSE_TIMERS` | 1 | 启用软件定时器 |
-| `configCHECK_FOR_STACK_OVERFLOW` | 2 | 栈溢出检查方法（0=关闭，1=快速，2=全面） |
-| `configUSE_TICKLESS_IDLE` | 0/1 | Tickless 低功耗模式 |
-| `configGENERATE_RUN_TIME_STATS` | 0/1 | 运行时间统计 |
-
-### 6.7.2 Tick 频率选择
-
-| Tick 频率 | 最小延时分辨率 | CPU 开销 | 适用场景 |
-|---|---|---|---|
-| 100 Hz | 10 ms | 极低 | 低功耗、对实时性要求不高 |
-| 1000 Hz | 1 ms | 低 | 通用嵌入式（最常用） |
-| 10000 Hz | 0.1 ms | 中等 | 高精度实时控制 |
-
-### 6.7.3 移植层实现要点
-
-移植层（`port.c` / `portmacro.h`）需实现从硬件角度的上下文切换、临界区管理与 Tick 中断处理。
-
-Cortex-M 架构的关键移植点：
-- **PendSV 中断**：用于上下文切换（最低优先级，确保在所有 ISR 完成后才切换）；
-- **SysTick 中断**：产生系统 Tick 心跳；
-- **临界区**：通过 `BASEPRI` 寄存器屏蔽不高于特定优先级的中断（而非全局关中断），保证高优先级中断仍可响应。
-
-```mermaid
-sequenceDiagram
-    participant App as 应用任务
-    participant Kernel as FreeRTOS 内核
-    participant PendSV as PendSV ISR
-    participant SysTick as SysTick ISR
-    SysTick->>Kernel: xTaskIncrementTick()
-    Kernel->>Kernel: 检查是否需要切换
-    Kernel->>PendSV: 置位 PendSV
-    PendSV->>PendSV: 保存当前任务上下文
-    PendSV->>PendSV: 恢复新任务上下文
-    PendSV->>App: 切换到新任务
-```
+- 移植层（port.c/portmacro.h）需实现从硬件角度的上下文切换、临界区管理与 Tick 中断处理，移植时需关注编译器寄存器约定与中断入口/退出序列。
 
 ---
 
-## 6.8 调试、追踪与性能分析
+## 1.8 调试、追踪与性能分析
 
 - 软件追踪：FreeRTOS 提供 trace宏（configUSE_TRACE_FACILITY）与 run-time stats（configGENERATE_RUN_TIME_STATS）用于任务运行时间统计。
 - 第三方工具：FreeRTOS+Trace、Segger SystemView 等可以进行高精度的时序采样和可视化分析。
@@ -299,15 +197,15 @@ sequenceDiagram
 
 ---
 
-## 6.9 工程实例：基于 FreeRTOS 的低功耗传感器网关（Cortex-M）
+## 1.9 工程实例：基于 FreeRTOS 的低功耗传感器网关（Cortex-M）
 
-### 实例背景
+### 1.9.1 实例背景
 
 场景：物联网边缘节点采集多路传感器数据，做本地预处理并通过串口/无线模块上报到网关。要求：周期性采样、实时事件（外部中断）响应、最低化睡眠功耗。
 
 工程价值：展示任务划分、互斥/队列通信、ISR 与任务交互、软件定时器与低功耗（Tickless）策略的综合应用。
 
-### 系统架构（简化）
+### 1.9.2 系统架构（简化）
 
 ```mermaid
 flowchart LR
@@ -323,7 +221,7 @@ flowchart LR
   UART_ISR -->|xQueueSendFromISR| RxQ
 ```
 
-### 核心流程与关键代码片段（精简、可运行风格）
+### 1.9.3 核心流程与关键代码片段（精简、可运行风格）
 
 说明：以下代码为核心片段，省略硬件初始化细节，仅示范任务、队列、ISR 与通信。
 
@@ -435,14 +333,14 @@ sequenceDiagram
 
 ---
 
-## 6.10 本章小结
+## 1.10 本章小结
 
 - FreeRTOS 提供了轻量、可移植且工程化的实时内核，适合资源受限的嵌入式实时系统。核心技能包括任务划分与优先级设计、线程安全的通信同步、ISR 与任务的协同、以及合理的内存分配策略。
 - 工程实现中需关注优先级反转、内存碎片、ISR 执行时间以及调试/追踪策略，以保证系统的确定性与可靠性。
 
 ---
 
-## 6.11 参考资料与延伸阅读
+## 1.11 参考资料与延伸阅读
 
 - FreeRTOS 官方文档与 API 参考（https://www.freertos.org）
 - Real Time Concepts for Embedded Systems — Qing Li（参考实时系统理论）
@@ -450,7 +348,7 @@ sequenceDiagram
 
 ---
 
-## 本章测验
+## 1.12 本章测验
 
 <div id="exam-meta" data-exam-id="chapter6" data-exam-title="第六章 FreeRTOS实时操作系统测验" style="display:none"></div>
 

@@ -1,6 +1,8 @@
-# 第2章 STM32CubeMX 编程指南
-
-## 本章知识导图
+---
+number headings: first-level 2, start-at 2
+---
+## 2 第2章 STM32CubeMX 编程指南
+### 2.1 本章知识导图
 
 ```plantuml
 @startmindmap
@@ -74,9 +76,9 @@
 
 ---
 
-## 1  CubeMX 简介与安装
+### 2.2 CubeMX 简介与安装
 
-### 1.1  工具定位
+#### 2.2.1 工具定位
 
 **STM32CubeMX** 是 ST 官方提供的**图形化初始化代码生成工具**。其核心作用是：
 
@@ -91,7 +93,7 @@ CubeMX 解决的核心痛点：
 | 外设初始化代码 | 手写数十行结构体赋值 | 图形配置后全部自动生成 |
 | FreeRTOS 移植 | 手动复制源码、修改配置 | 勾选即可，自动配置调度器 |
 
-### 1.2  安装方式
+#### 2.2.2 安装方式
 
 CubeMX 提供两种使用方式，功能完全相同：
 
@@ -117,40 +119,40 @@ CubeMX 提供两种使用方式，功能完全相同：
 
 > **本课程推荐使用 STM32CubeIDE**，因为它将 CubeMX 配置、代码编辑、编译、烧录、调试集成在同一窗口，无需在多个软件间切换。
 
-### 1.3  主界面布局
+#### 2.2.3 主界面布局
 
 STM32CubeMX（或 CubeIDE 的 .ioc 编辑界面）分为五个主要区域：
 
 ```text
   ┌─────────────────────────────────────────────────────────────────┐
-  │  菜单栏：File / Window / Help                                   │
+  │  菜单栏：File / Window / Help                                    │
   ├────────────────────────────┬────────────────────────────────────┤
-  │                            │  ② 外设配置面板                    │
+  │                            │  ② 外设配置面板                     │
   │                            │  ┌──────────────────────────────┐  │
-  │   ① 芯片引脚视图           │  │  选中外设后，在此设置参数    │  │
-  │      (Pin View)            │  │  例：GPIO mode / Speed       │  │
+  │   ① 芯片引脚视图            │  │  选中外设后，在此设置参数       │  │
+  │      (Pin View)            │  │  例：GPIO mode / Speed        │  │
   │                            │  └──────────────────────────────┘  │
-  │  引脚颜色含义：            │                                    │
-  │  🟢 绿色 = 已配置          ├────────────────────────────────────┤
-  │  🔴 红色 = 冲突            │  ③ 标签页切换                      │
-  │  ⬜ 灰色 = 未使用          │  [Pinout & Config] [Clock Config]  │
+  │  引脚颜色含义：              │                                    │
+  │  🟢 绿色 = 已配置            ├────────────────────────────────────┤
+  │  🔴 红色 = 冲突              │  ③ 标签页切换                      │
+  │  ⬜ 灰色 = 未使用            │  [Pinout & Config] [Clock Config]  │
   │                            │  [Project Manager] [Tools]         │
   ├────────────────────────────┴────────────────────────────────────┤
-  │  ④ 时钟树（Clock Configuration 标签页）                         │
-  │     HSE ──► PLL ──► SYSCLK ──► AHB / APB1 / APB2                │
+  │  ④ 时钟树（Clock Configuration 标签页）                          │
+  │     HSE ──► PLL ──► SYSCLK ──► AHB / APB1 / APB2              │
   ├─────────────────────────────────────────────────────────────────┤
-  │  ⑤ 工程管理器（Project Manager 标签页）                         │
-  │     工程名称 / 路径 / IDE选择 / HAL库版本                       │
+  │  ⑤ 工程管理器（Project Manager 标签页）                          │
+  │     工程名称 / 路径 / IDE选择 / HAL库版本                         │
   └─────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 2  创建工程的完整流程
+### 2.3 创建工程的完整流程
 
 以 **Blue Pill（STM32F103C8T6）LED 闪烁** 为例，演示从零创建一个 CubeMX 工程的六个步骤。
 
-### 步骤① 选择目标芯片
+#### 2.3.1 步骤① 选择目标芯片
 
 打开 STM32CubeIDE → `File → New → STM32 Project` → 在芯片选型界面：
 
@@ -173,7 +175,7 @@ STM32CubeMX（或 CubeIDE 的 .ioc 编辑界面）分为五个主要区域：
   点击 Next → 填写工程名（如 LED_Blink）→ Finish
 ```
 
-### 步骤② 系统配置（SYS / RCC）
+#### 2.3.2 步骤② 系统配置（SYS / RCC）
 
 在 `Pinout & Configuration` 标签页左侧的 **System Core** 类别中：
 
@@ -193,7 +195,7 @@ STM32CubeMX（或 CubeIDE 的 .ioc 编辑界面）分为五个主要区域：
 
 > 完成后，芯片图上 PC14/PC15（晶振引脚）和 PA13/PA14（SWD 引脚）会自动变为绿色，无需手动分配。
 
-### 步骤③ 引脚功能分配
+#### 2.3.3 步骤③ 引脚功能分配
 
 在芯片引脚图上，**鼠标左键点击 PC13 引脚** → 从弹出菜单中选择 `GPIO_Output`：
 
@@ -214,7 +216,7 @@ STM32CubeMX（或 CubeIDE 的 .ioc 编辑界面）分为五个主要区域：
   └──────────────────────────────────────┘
 ```
 
-### 步骤④ 时钟树配置
+#### 2.3.4 步骤④ 时钟树配置
 
 切换到 **Clock Configuration** 标签页：
 
@@ -237,11 +239,11 @@ STM32CubeMX（或 CubeIDE 的 .ioc 编辑界面）分为五个主要区域：
   → CubeMX 自动完成所有分频/倍频参数的计算与填充
 ```
 
-### 步骤⑤ 外设参数配置
+#### 2.3.5 步骤⑤ 外设参数配置
 
 对于本示例（LED 闪烁），GPIO 已在步骤③配置完毕。若有其他外设（如 USART），在 `Pinout & Configuration` 左侧列表中展开对应类别进行配置（详见第4节）。
 
-### 步骤⑥ 工程设置与代码生成
+#### 2.3.6 步骤⑥ 工程设置与代码生成
 
 切换到 **Project Manager** 标签页：
 
@@ -268,9 +270,9 @@ STM32CubeMX（或 CubeIDE 的 .ioc 编辑界面）分为五个主要区域：
 
 ---
 
-## 3  生成代码的结构与编写规范
+### 2.4 生成代码的结构与编写规范
 
-### 3.1  工程目录结构
+#### 2.4.1 工程目录结构
 
 CubeMX 生成的工程具有固定目录结构：
 
@@ -297,7 +299,7 @@ CubeMX 生成的工程具有固定目录结构：
 
 > **规则**：只在 `Core/Src/` 和 `Core/Inc/` 中编写用户代码，`Drivers/` 目录内容不要手动修改。
 
-### 3.2  main.h 中的引脚宏定义
+#### 2.4.2 main.h 中的引脚宏定义
 
 CubeMX 根据 **User Label** 在 `main.h` 中自动生成宏定义：
 
@@ -317,7 +319,7 @@ HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
 HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
 ```
 
-### 3.3  USER CODE BEGIN / END 编写规范
+#### 2.4.3 USER CODE BEGIN / END 编写规范
 
 CubeMX 生成的 `main.c` 中遍布成对的注释标记，**用户代码必须写在标记之间**：
 
@@ -365,7 +367,7 @@ int main(void)
 
 > ⚠️ **警告**：写在 `USER CODE BEGIN/END` **之外**的代码，在下次执行 "Generate Code" 时会被 CubeMX **覆盖删除**。
 
-### 3.4  中断回调函数的编写规范
+#### 2.4.4 中断回调函数的编写规范
 
 HAL 库采用**弱符号回调（weak callback）**机制：HAL 驱动内部定义了 `__weak` 修饰的空回调函数，用户在 `USER CODE BEGIN 0` 区域重写同名函数即可覆盖：
 
@@ -393,9 +395,9 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 
 ---
 
-## 4  常用外设配置实战
+### 2.5 常用外设配置实战
 
-### 4.1  GPIO — 输出与输入
+#### 2.5.1 GPIO — 输出与输入
 
 **LED 输出（推挽输出）：**
 
@@ -430,7 +432,7 @@ else
 }
 ```
 
-### 4.2  USART — 串口通信
+#### 2.5.2 USART — 串口通信
 
 **CubeMX 配置步骤：**
 
@@ -474,7 +476,7 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) /* 接收完成回调 */
 }
 ```
 
-### 4.3  TIM — 定时器与 PWM
+#### 2.5.3 TIM — 定时器与 PWM
 
 **基本定时（产生周期性中断）：**
 
@@ -520,7 +522,7 @@ HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_1); /* 启动 PWM 输出 */
 __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, 1500); /* 中间位置 90° */
 ```
 
-### 4.4  I2C — 总线通信
+#### 2.5.4 I2C — 总线通信
 
 ```text
   Connectivity → I2C1
@@ -545,7 +547,7 @@ HAL_I2C_Mem_Read(&hi2c1, 0x68 << 1,   /* 设备地址 */
                   buf, 6, HAL_MAX_DELAY);
 ```
 
-### 4.5  ADC — 模拟信号采集
+#### 2.5.5 ADC — 模拟信号采集
 
 ```text
   Analog → ADC1
@@ -570,9 +572,9 @@ float voltage = adc_val * 3.3f / 4095.0f;
 
 ---
 
-## 5  FreeRTOS 多任务配置
+#### 2.5.6 FreeRTOS 多任务配置
 
-### 5.1  启用 FreeRTOS
+##### 2.5.6.1 启用 FreeRTOS
 
 在 CubeMX 中：`Middleware and Software Packs → FreeRTOS → CMSIS_V2`
 
@@ -588,7 +590,7 @@ float voltage = adc_val * 3.3f / 4095.0f;
 
 > ⚠️ 启用 FreeRTOS 后，CubeMX 会自动将 HAL 时基从 **SysTick** 改为 **TIM（如 TIM1）**，因为 FreeRTOS 自身需要独占 SysTick。
 
-### 5.2  创建任务
+##### 2.5.6.2 创建任务
 
 在 CubeMX 的 FreeRTOS 配置页 → `Tasks and Queues` → `Add Task`：
 
@@ -619,7 +621,7 @@ void StartLedTask(void *argument)
 }
 ```
 
-### 5.3  任务间通信
+##### 2.5.6.3 任务间通信
 
 **信号量（二值信号量，用于任务同步）：**
 
@@ -676,7 +678,7 @@ void StartProcessTask(void *argument)
 }
 ```
 
-### 5.4  osDelay 与 HAL_Delay 的区别
+##### 2.5.6.4 osDelay 与 HAL_Delay 的区别
 
 | 函数 | 底层实现 | 使用场景 |
 | ---- | -------- | -------- |
@@ -685,9 +687,9 @@ void StartProcessTask(void *argument)
 
 ---
 
-## 6  重新配置工程
+#### 2.5.7 重新配置工程
 
-### 6.1  修改配置的工作流
+##### 2.5.7.1 修改配置的工作流
 
 当硬件设计发生变化（如增加传感器、修改引脚）或需要启用新外设时：
 
@@ -706,7 +708,7 @@ void StartProcessTask(void *argument)
   在新生成的框架中继续编写业务逻辑
 ```
 
-### 6.2  用户代码保护机制验证
+##### 2.5.7.2 用户代码保护机制验证
 
 以下场景演示 USER CODE 保护是否生效：
 
@@ -732,7 +734,7 @@ void StartProcessTask(void *argument)
   └────────────────────────────────────────────────────┘
 ```
 
-### 6.3  常见问题与最佳实践
+##### 2.5.7.3 常见问题与最佳实践
 
 | 问题 | 原因 | 解决方法 |
 | ---- | ---- | -------- |
@@ -745,7 +747,7 @@ void StartProcessTask(void *argument)
 
 ---
 
-### 6.4 使用 Coolify 配置容器运行 PicSimLab 仿真
+##### 2.5.7.4 使用 Coolify 配置容器运行 PicSimLab 仿真
 
 PicSimLab 是一种用于嵌入式/传感器仿真的轻量化仿真环境。可通过 Coolify 将 PicSimLab 以容器形式部署，便于在云或本地服务器上提供仿真服务给学生和实验环境。
 
@@ -779,7 +781,7 @@ services:
 
 ---
 
-## 7  本章在线测试（10 题）
+#### 2.5.8 本章在线测试（10 题）
 
 <div id="exam-meta" data-exam-id="chapter2" data-exam-title="第二章 CubeMX编程测验" style="display:none"></div>
 

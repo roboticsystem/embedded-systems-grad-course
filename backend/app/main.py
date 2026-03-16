@@ -8,7 +8,7 @@ from app.database import init_db
 from app.sync_exams import sync_exams
 from app.routers import students, auth, exam, teacher
 
-app = FastAPI(title="机器人系统课程考试系统", docs_url="/api/docs")
+app = FastAPI(title="嵌入式系统课程考试系统", docs_url="/api/docs")
 
 app.add_middleware(
     CORSMiddleware,

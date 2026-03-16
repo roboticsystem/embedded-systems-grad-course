@@ -524,7 +524,7 @@ def deploy_coolify(sync_summary: dict):
         print(f"✅ 已有项目: {PROJECT_NAME}  uuid={project_uuid}")
     else:
         resp = _coolify_api("POST", "/projects",
-                            json={"name": PROJECT_NAME, "description": "机器人系统课程"})
+                            json={"name": PROJECT_NAME, "description": "嵌入式系统课程"})
         resp.raise_for_status()
         project_uuid = resp.json()["uuid"]
         print(f"✅ 已创建项目: {PROJECT_NAME}  uuid={project_uuid}")

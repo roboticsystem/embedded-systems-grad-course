@@ -1,6 +1,6 @@
-# Robotics System
+# 《机器人系统》
 
-Welcome to the interactive course website for the "Robotics System" course.
+Welcome to the interactive course website for the "《机器人系统》" course.
 
 This project is designed to provide a comprehensive learning platform that integrates multimedia courseware, interactive experiments, and project practice materials. It aims to facilitate a deep understanding of robotics systems by combining theoretical knowledge with practical applications.
 
@@ -8,7 +8,7 @@ This project is designed to provide a comprehensive learning platform that integ
 
 ## Project Overview
 
-The "Robotics System" course website offers:
+The "《机器人系统》" course website offers:
 
 - **Multimedia Courseware:** Rich video lectures, slides, and reading materials to cover fundamental and advanced topics in robotics. These materials are curated by experts and updated regularly to reflect the latest advancements in the field.
 - **Interactive Experiments:** Hands-on virtual labs and simulations that allow students to experiment with robotic algorithms and hardware concepts in a controlled environment. These experiments provide real-time feedback and encourage exploration and innovation.

@@ -1,9 +1,9 @@
 ---
 number headings: first-level 2, start-at 4
 ---
-## 4 第4章 嵌入式软件的设计模式
+## 4 第4章 机器人系统软件的设计模式
 
-> 嵌入式系统的软件质量不仅取决于代码能否运行，更取决于代码能否在资源受限、实时性要求严苛的环境下**长期稳定、可维护地运行**。设计模式是前人在解决反复出现的工程问题时总结出的可复用方案，掌握它们将使你的嵌入式代码从"能跑"走向"优雅"。
+> 机器人系统的软件质量不仅取决于代码能否运行，更取决于代码能否在资源受限、实时性要求严苛的环境下**长期稳定、可维护地运行**。设计模式是前人在解决反复出现的工程问题时总结出的可复用方案，掌握它们将使你的机器人系统代码从"能跑"走向"优雅"。
 
 ### 4.1 本章知识导图
 
@@ -1155,7 +1155,7 @@ static void cmd_status(const char *args) {
 
 ### 4.10 本章测验
 
-<div id="exam-meta" data-exam-id="chapter4" data-exam-title="第四章 嵌入式软件设计模式测验" style="display:none"></div>
+<div id="exam-meta" data-exam-id="chapter4" data-exam-title="第四章 机器人系统软件设计模式测验" style="display:none"></div>
 
 <!-- mkdocs-quiz intro -->
 

@@ -2,9 +2,9 @@
 number headings: first-level 2, start-at 10
 ---
 
-## 10 第10章 嵌入式系统与互联网：ESP8266/ESP32 的蓝牙与 WiFi 应用，NAT 穿越与 MQTT
+## 10 第10章 机器人系统与互联网：ESP8266/ESP32 的蓝牙与 WiFi 应用，NAT 穿越与 MQTT
 
-本章核心内容：基于 ESP8266 与 ESP32 的无线连接（WiFi、蓝牙 BLE/BT）实现方法、嵌入式设备如何安全接入互联网、常见 NAT 穿越策略（用于远程控制）、以及 MQTT 在物联网中的工程实践与安全应用。面向研究生，强调理论与工程实践结合，提供架构图、时序图、实现要点、核心代码片段与安全/性能考量。
+本章核心内容：基于 ESP8266 与 ESP32 的无线连接（WiFi、蓝牙 BLE/BT）实现方法、机器人设备如何安全接入互联网、常见 NAT 穿越策略（用于远程控制）、以及 MQTT 在物联网中的工程实践与安全应用。面向研究生，强调理论与工程实践结合，提供架构图、时序图、实现要点、核心代码片段与安全/性能考量。
 
 学习目标：
 - 掌握 ESP8266/ESP32 的网络与蓝牙能力差异及选型依据；
@@ -249,7 +249,7 @@ sequenceDiagram
 
 ### 10.9 本章测验
 
-<div id="exam-meta" data-exam-id="chapter10" data-exam-title="第十章 嵌入式系统与互联网测验" style="display:none"></div>
+<div id="exam-meta" data-exam-id="chapter10" data-exam-title="第十章 机器人系统与互联网测验" style="display:none"></div>
 
 <!-- mkdocs-quiz intro -->
 

@@ -67,11 +67,11 @@ CONTAINER_FIXED_ENV = {
 def show_menu() -> str:
     print()
     print("╔" + "═" * 53 + "╗")
-    print("║    🤖  《嵌入式系统》课程新教材 — 管理工具                   ║")
+    print("║    🤖  研究生《机器人系统》课程新教材 — 管理工具    ║")
     print("╠" + "═" * 53 + "╣")
-    print("║  [1]  本地预览   MkDocs + API（热重载）            ║")
-    print("║  [2]  远程部署   触发 Coolify 重建                 ║")
-    print("║  [Q]  退出                                         ║")
+    print("║  [1]  本地预览   MkDocs + API（热重载）             ║")
+    print("║  [2]  远程部署   触发 Coolify 重建                  ║")
+    print("║  [Q]  退出                                          ║")
     print("╚" + "═" * 53 + "╝")
     while True:
         choice = input("请选择 [1 / 2 / Q]: ").strip().upper()
@@ -524,7 +524,7 @@ def deploy_coolify(sync_summary: dict):
         print(f"✅ 已有项目: {PROJECT_NAME}  uuid={project_uuid}")
     else:
         resp = _coolify_api("POST", "/projects",
-                            json={"name": PROJECT_NAME, "description": "嵌入式系统课程"})
+                            json={"name": PROJECT_NAME, "description": "机器人系统课程"})
         resp.raise_for_status()
         project_uuid = resp.json()["uuid"]
         print(f"✅ 已创建项目: {PROJECT_NAME}  uuid={project_uuid}")

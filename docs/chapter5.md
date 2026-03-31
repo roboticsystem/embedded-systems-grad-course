@@ -411,7 +411,7 @@ r.stop()
 
 ### 5.8 本章测验
 
-<div id="exam-meta" data-exam-id="chapter5" data-exam-title="第五章 Renode高级仿真编程测验" style="display:none"></div>
+<div id="exam-meta" data-exam-id="chapter5" data-exam-title="第五章 Renode高级机器人系统仿真编程测验" style="display:none"></div>
 
 <!-- mkdocs-quiz intro -->
 

@@ -2,7 +2,7 @@
 number headings: first-level 2, start-at 12
 ---
 
-## 12 第12章 嵌入式开发环境配置
+## 12 第12章 机器人系统开发环境配置
 
 ### 12.1 本章知识导图
 
@@ -856,7 +856,7 @@ void Sensor_Task(void)
   <p><strong>章节测验</strong> | 满分: 100分 | 建议用时: 45分钟</p>
 </div>
 
-<div id="exam-meta" data-exam-id="chapter12" data-exam-title="第12章 嵌入式开发环境配置 测验" style="display:none"></div>
+<div id="exam-meta" data-exam-id="chapter12" data-exam-title="第12章 机器人系统开发环境配置 测验" style="display:none"></div>
 
 <!-- mkdocs-quiz intro -->
 

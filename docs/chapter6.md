@@ -2,402 +2,342 @@
 number headings: first-level 2, start-at 6
 ---
 
-## 6 第6章 机器人系统实时操作系统 — FreeRTOS
+## 6 第6章 机器人运动与电机驱动
 
-本章核心内容：机器人系统实时操作系统（RTOS）概念、FreeRTOS 内核架构与组件、任务调度原理、进程间通信与同步、内存管理策略、中断与 ISR 安全 API、移植与配置、调试与性能分析，以及基于 FreeRTOS 的工程实例。目标读者为研究生，要求具备机器人系统基础（C 语言、MCU 架构）并能够在此基础上掌握 RTOS 的设计思想与工程实现能力。
+### 6.1 机器人运动概述
 
-学习目标：
+机器人的运动方式（Locomotion）决定了其活动范围和应用场景。从运动学角度看，不同方式对电机控制和驱动系统的要求差异很大，选对运动方式是机器人系统设计的第一步。
 
-- 理解实时操作系统的基本概念与调度策略，掌握 FreeRTOS 的内核结构与关键对象（任务、队列、信号量、互斥量、事件组、软件定时器、内存管理）。
-- 能够在 FreeRTOS 上设计并实现合理的任务划分、优先级策略与资源同步机制，处理优先级反转与中断交互场景。
-- 掌握 FreeRTOS 的移植与配置要点，能基于典型 Cortex-M 平台完成一个小型工程（含任务/ISR/通信/调度验证），并理解性能调优与调试工具的使用。
+#### 主要运动方式
 
-本章重难点：
+| 运动方式 | 典型平台 | 驱动元件 | 适用场景 |
+|----------|---------|---------|---------|
+| 轮式（Wheeled） | 差速小车、全向平台、汽车 | 直流电机、步进电机 | 平坦地面、室内 |
+| 履带式（Tracked） | 坦克、排爆机器人 | 直流电机 | 崎岖地形、楼梯 |
+| 足式（Legged） | 四足狗、双足人形 | 舵机、关节电机 | 复杂地形、仿生 |
+| 飞行（Aerial） | 多旋翼、固定翼 | 无刷电机 + ESC | 空中侦察、航拍 |
+| 水下（Underwater） | ROV、AUV | 推进器电机 | 水下探测、维护 |
 
-- 优先级设计与任务调度（优先级反转与互斥解决方案）。
-- 中断上下文与 RTOS API 的安全使用（FromISR 系列）。
-- 内存管理模式对实时性的影响与选择（heap_x 系列）。
-- 工程实例中的时序分析与系统级调试方法。
-
----
-
-### 6.1 实时操作系统与 FreeRTOS 概述
-
-- 实时操作系统（RTOS）在嵌入式系统中的定位：保证任务在确定的时间约束内完成；区别于通用操作系统的调度目标与资源管理策略。
-- FreeRTOS 是一个轻量级、可移植、开源（MIT 许可）的嵌入式 RTOS，广泛用于工业控制、物联网终端、消费电子及车载子系统等场景。
-
-#### 6.1.1 FreeRTOS 的设计目标与应用场景
-
-- 设计目标：最小化内核开销、可裁剪性、高可移植性、确定性（低抖动）。
-- 适用场景示例：边缘传感器网关（低功耗实时采样）、运动控制闭环（严格周期性控制）、车载 ECUs（任务隔离与故障控制）等。
-
----
-
-### 6.2 FreeRTOS 内核架构与主要对象
-
-图形优先：下图为简化的 FreeRTOS 内核组件交互图。
-
-
-```mermaid
-flowchart LR
-  A[硬件（Cortex-M）] -->|中断/系统时钟| Kernel[FreeRTOS 内核]
-  Kernel --> Scheduler[调度器]
-  Kernel --> Queue[队列]
-  Kernel --> Semaphore[信号量/互斥量]
-  Kernel --> Timer[软件定时器]
-  Kernel --> Task[任务集合]
-  Task -->|互斥/消息| Queue
-  Task -->|等待| Semaphore
-  subgraph Application
-    Sensor[传感器任务]
-    Comm[通信任务]
-    Control[控制任务]
-  end
-  Application --> Task
+```bob
+┌────────────────────────────────────────────────────┐
+│              机器人运动方式分类                      │
+├────────────────────────────────────────────────────┤
+│                                                    │
+│  ┌────────┐  ┌────────┐  ┌──────┐  ┌────────────┐ │
+│  │  轮式   │  │ 履带式　│  │ 足式 │  │  飞行/水下 │ │
+│  └───┬────┘  └───┬────┘  └──┬───┘  └─────┬──────┘ │
+│      │           │          │             │        │
+│  ┌───▼───┐   ┌───▼───┐  ┌──▼────┐  ┌─────▼─────┐  │
+│  │差速    │   │双履带 │  │四足   │  │多旋翼    │  │
+│  │全向    │   │单侧   │  │双足   │  │固定翼    │  │
+│  │阿克曼  │   │差速   │  │六足   │  │推进器    │  │
+│  └───────┘   └───────┘  └───────┘  └──────────┘  │
+└────────────────────────────────────────────────────┘
 ```
 
+本课程聚焦**轮式机器人**——它是最常见的教学和科研平台，驱动简单、控制理论成熟，且直接对应本章后续的 PWM 和电机驱动技术。
 
-#### 6.2.1 关键对象与作用（图形 + 文字）
+### 6.2 轮式机器人运动学基础
 
-- 任务（Task / Thread）：执行上下文单元，包含栈、寄存器保存区、控制块（TCB）。
-- 调度器（Scheduler）：基于优先级的抢占式或协作式调度；Tick 中断触发心跳（除 Tickless 模式）。
-- 队列（Queue）：用于任务间或 ISR 与任务间传递消息，线程安全。优先使用队列来替代共享内存与锁，便于时序分析。
-- 信号量/互斥量（Semaphore/Mutex）：用于事件通知与互斥访问；互斥量支持优先级继承以缓解优先级反转。
-- 事件组（EventGroup）：用于多事件位组合等待/通知场景。
-- 软件定时器（Software Timer）：以任务上下文回调的形式执行定时回调，适合延后处理与周期性任务触发。
-- 内存管理（heap_1..heap_5）：多种内存分配策略以平衡时间确定性与内存利用率。
+#### 差速驱动模型（Differential Drive）
 
----
+差速驱动是最常用的轮式机器人配置：两个独立驱动轮 + 一个或多个从动轮（万向轮）。通过控制左右轮的速度差实现前进、后退和转向。
 
-### 6.3 任务与调度策略
-
-#### 6.3.1 调度模型
-
-- 抢占式优先级调度（Preemptive Priority Scheduling）：常用配置，具有快速响应高优先级任务的能力。
-- 协作式调度（Cooperative / Non-preemptive）：通过任务显式放弃 CPU 实现切换，适合简单软实时场景。
-- 时间片（Round-Robin）在同一优先级的任务之间可配置时间片轮转。
-- Tickless Idle：降低空闲功耗，通过禁止系统 Tick 来进入低功耗模式（适用于能接受更大唤醒延迟的场景）。
-
-图示：任务调度时序图（抢占示意）
-
-```mermaid
-sequenceDiagram
-    autonumber
-    participant ISR as ISR
-    participant T1 as 高优先级任务
-    participant T2 as 低优先级任务
-    ISR->>T1: 唤醒(T1)
-    Note right of T1: 抢占发生
-    T2-->>T1: 上下文切换
+```bob
+┌──────────────────────────────────────────┐
+│         差速驱动运动学模型                │
+│                                          │
+│            "v_R"                          │
+│         ┌───┐                            │
+│         │右轮│                            │
+│    ┌────┤   ├────┐                       │
+│    │    └───┘    │                       │
+│    │     机器人   │──── "v, ω"           │
+│    │    ┌───┐    │                       │
+│    └────┤   ├────┘                       │
+│         │左轮│                            │
+│         └───┘                            │
+│            "v_L"                          │
+│                                          │
+│  "v = (v_R + v_L) / 2"                  │
+│  "ω = (v_R - v_L) / L"                  │
+│  "v_R = v + ωL/2"                        │
+│  "v_L = v - ωL/2"                        │
+└──────────────────────────────────────────┘
 ```
 
-#### 6.3.2 优先级设计与优先级反转
+**运动学公式**：
 
-- 优先级设计原则：按响应时延/功能关键性划分优先级；避免所有临界段阻塞高优先级任务。
-- 优先级反转问题：低优先级任务持有互斥资源阻塞高优先级任务，若中优先级任务抢占，导致高优先级长期等待。
-- 解决：使用互斥量（Mutex）与优先级继承（Priority Inheritance）机制；必要时调整任务划分或使用临界区最小化策略。
+设左轮速度 $v_L$，右轮速度 $v_R$，轮距（两轮中心距离）为 $L$，则：
 
-表格对比：调度模式对比
+- **正运动学**（轮速 → 机器人速度）：
 
-| 模式 | 优点 | 缺点 | 适用场景 |
-|---|---:|---|---|
-| 抢占式优先级 | 响应快、确定性高 | 复杂度高、需防止优先级反转 | 严格实时控制 |
-| 协作式 | 实现简单、可预测 | 需任务配合、易阻塞 | 小型嵌入式设备 |
-| Tickless | 降低功耗 | 唤醒延迟不确定 | 低功耗终端 |
+$$v = \frac{v_R + v_L}{2}, \quad \omega = \frac{v_R - v_L}{L}$$
 
----
+- **逆运动学**（期望速度 → 轮速）：
 
-### 6.4 任务间通信与同步
+$$v_R = v + \frac{\omega L}{2}, \quad v_L = v - \frac{\omega L}{2}$$
 
-图形优先：通信/同步对象及其关系示意图
+其中 $v$ 是线速度（m/s），$\omega$ 是角速度（rad/s）。
 
-```mermaid
-flowchart LR
-  TaskA -->|xQueueSend| Queue
-  ISR -->|xQueueSendFromISR| Queue
-  TaskB -->|xQueueReceive| Queue
-  TaskA -->|xSemaphoreGive| Sem
-  TaskB -->|xSemaphoreTake| Sem
-  TaskA -->|xEventGroupSetBits| EventGroup
-  TaskC -->|xEventGroupWaitBits| EventGroup
-```
+#### 其他轮式配置
 
-#### 6.4.1 队列（Queue）
+| 配置 | 特点 | 典型应用 |
+|------|------|---------|
+| **阿克曼转向** | 前轮转向、后轮驱动，类似汽车 | 自动驾驶车辆 |
+| **全向轮（Omni）** | 3/4 个全向轮，可任意方向平移 | 室内服务机器人、RoboCup |
+| **麦克纳姆轮** | 4 个麦轮，全向移动 | 仓储机器人、AGV |
 
-- 用法：用于字节、结构体或指针的安全传递；FIFO 顺序保证。
-- 性能注意：队列拷贝开销（配置项可使用指针传递减少拷贝），深度与元素大小影响内存消耗。
+#### 从运动学到电机控制
 
-#### 6.4.2 信号量与互斥量
+运动学提供了「期望的轮速 → 电机目标转速」的映射。本章后续内容将解决「如何精确控制电机达到目标转速」的问题：
 
-- 二值信号量（Binary Semaphore）：事件通知语义。
-- 互斥量（Mutex）：带优先级继承，用于保护短临界段。
-- 表：通信/同步原语对比
-
-| 原语 | 线程安全 | 支持优先级继承 | 适合场景 |
-|---|---:|---:|---|
-| Queue | 是 | 否 | 数据传递 |
-| Binary Semaphore | 是 | 否 | 事件通知 |
-| Mutex | 是 | 是 | 互斥保护（带优先级继承） |
-| EventGroup | 是 | 否 | 多位事件组合 |
+1. **PWM 调速**（8.3-8.5 节）：通过占空比控制电机电压 → 控制转速；
+2. **电机与驱动器**（8.6-8.8 节）：选择合适的电机和驱动硬件；
+3. **闭环控制**（第 9 章 PID）：结合编码器反馈实现精确速度控制。
 
 ---
 
-### 6.5 内存管理机制
+### 6.3 PWM 波形简介
+PWM（Pulse Width Modulation，脉宽调制）是一种通过改变脉冲占空比来调控平均功率或电压的技术。保持固定频率下，改变高电平持续时间（占空比）即可改变负载上的平均电压，从而控制电机转速或 LED 亮度等。
 
-- FreeRTOS 提供多种 heap 实现（heap_1 到 heap_5），分别适配不同的需求：
-  - heap_1：简单的静态分配，无释放（适合静态系统）。
-  - heap_2：简单堆分配，支持释放，但非线程安全。 (注：早期版本)
-  - heap_3：封装 libc malloc/free（依赖平台实现）。
-  - heap_4：内存合并算法，支持碎片整理与释放，常用。
-  - heap_5：支持多个内存区域，适合非连续内存区域的系统。
+### 6.4 PWM 的等效原理
+- 平均值模型：对低通响应慢的负载（如电机转子和惯性系统），PWM 在周期内的快速开关相当于一个等效直流电平，其平均值为 Vavg = Vcc * DutyCycle。
+- 低通滤波器视角：在频率远高于机械或电气系统带宽时，负载+滤波元件（电感、电容）把 PWM 的高频分量滤除，只响应平均分量。
+- 等效功率与 RMS：在功率计算或发热评估时，用有效值（RMS）比平均值更合适，特别在电感较小时需注意谐波导致的附加损耗。
 
-- 实时性考虑：动态内存分配可能带来不可预测的抖动，建议对关键路径使用静态/预分配策略或选择确定性较好的 heap 实现。
+### 6.5 如何产生 PWM 波
+- 硬件定时器输出（推荐）：微控制器（如 STM32）定时器的 PWM 模式，硬件直接产生高精度、稳定的 PWM 并可配合 DMA/中断。优点是精度高、占用 CPU 少。
+- 软件 PWM（软 PWM）：通过周期性中断或轮询翻转 IO 引脚实现。适用于简单或低频场景，但精度、抖动和 CPU 占用较差。
+- 高级协议：针对无刷电机（BLDC），存在 DShot、OneShot、Multishot 等高速数字协议，替代传统 50Hz 或 400Hz 的伺服 PWM，提供更低延迟与更高分辨率。
 
----
-
-### 6.6 中断与 ISR 安全 API
-
-- 在中断上下文调用 RTOS API 时，必须使用 FromISR 后缀的接口（如 xQueueSendFromISR、xSemaphoreGiveFromISR）以保证中断安全性；并在需要时使用 portYIELD_FROM_ISR 或宏触发上下文切换。
-
-时序图：ISR 到任务的唤醒路径
-
-```mermaid
-sequenceDiagram
-    participant ISR as 中断例程
-    participant Q as 队列
-    participant T as 任务
-    ISR->>Q: xQueueSendFromISR(data)
-    Q-->>T: 任务解除阻塞（如果优先级高则触发切换）
-    Note right of T: 调度器决定是否切换
-```
-
-关键注意事项：
-
-- 在 ISR 中避免长时运行或阻塞调用；尽量将复杂处理交由任务完成。
-- ISR 中使用的 API 必须是线程安全且为 FromISR 版本。
-- 如果 ISR 解除阻塞了更高优先级任务，必须在 ISR 末尾请求切换（portYIELD_FROM_ISR 或相关宏）。
-
----
-
-### 6.7 移植层与配置要点（FreeRTOSConfig.h）
-
-- 关键宏说明（示例）：
-  - configUSE_PREEMPTION：是否启用抢占。
-  - configUSE_TIME_SLICING：同优先级时间片开关。
-  - configCPU_CLOCK_HZ、configTICK_RATE_HZ：时钟与 Tick 配置。
-  - configMINIMAL_STACK_SIZE：默认最小任务栈。
-  - configTOTAL_HEAP_SIZE：若使用内部 heap 实现则定义堆大小。
-  - configUSE_MUTEXES、configUSE_COUNTING_SEMAPHORES、configUSE_TIMERS 等用于启用内核特性。
-
-- 移植层（port.c/portmacro.h）需实现从硬件角度的上下文切换、临界区管理与 Tick 中断处理，移植时需关注编译器寄存器约定与中断入口/退出序列。
-
----
-
-### 6.8 调试、追踪与性能分析
-
-- 软件追踪：FreeRTOS 提供 trace宏（configUSE_TRACE_FACILITY）与 run-time stats（configGENERATE_RUN_TIME_STATS）用于任务运行时间统计。
-- 第三方工具：FreeRTOS+Trace、Segger SystemView 等可以进行高精度的时序采样和可视化分析。
-- 常用调试策略：启用堆栈溢出检查（configCHECK_FOR_STACK_OVERFLOW）、任务断言与内存使用监控。
-
----
-
-### 6.9 工程实例：基于 FreeRTOS 的低功耗传感器网关（Cortex-M）
-
-#### 6.9.1 实例背景
-
-场景：物联网边缘节点采集多路传感器数据，做本地预处理并通过串口/无线模块上报到网关。要求：周期性采样、实时事件（外部中断）响应、最低化睡眠功耗。
-
-工程价值：展示任务划分、互斥/队列通信、ISR 与任务交互、软件定时器与低功耗（Tickless）策略的综合应用。
-
-#### 6.9.2 系统架构（简化）
-
-```mermaid
-flowchart LR
-  SensorTask[传感器采集任务]
-  ProcessTask[数据处理任务]
-  CommTask[通信任务]
-  UART_ISR[串口中断]
-  Main[主控(Core)]
-  SensorTask -->|queue| DataQ(Ordered)
-  ProcessTask -->|mutex| Resource
-  ProcessTask -->|queue| TxQ
-  CommTask -->|send| UART
-  UART_ISR -->|xQueueSendFromISR| RxQ
-```
-
-#### 6.9.3 核心流程与关键代码片段（精简、可运行风格）
-
-说明：以下代码为核心片段，省略硬件初始化细节，仅示范任务、队列、ISR 与通信。
+示例（STM32 HAL 伪代码，生成 TIMx PWM）：
 
 ```c
-/* FreeRTOS 头文件 */
-#include "FreeRTOS.h"
-#include "task.h"
-#include "queue.h"
-#include "semphr.h"
+// TIM 初始化略，确保计数频率与周期设定满足目标 PWM 频率
+htim.Instance = TIM3;
+htim.Init.Prescaler = 79;  // 例如 80MHz -> 1MHz
+htim.Init.Period = 999;    // 1kHz PWM
+HAL_TIM_PWM_Init(&htim);
 
-/* 任务句柄与队列 */
-static TaskHandle_t xSensorTaskHandle = NULL;
-static TaskHandle_t xCommTaskHandle = NULL;
-static QueueHandle_t xDataQueue = NULL;
-static SemaphoreHandle_t xResourceMutex = NULL;
+sConfigOC.OCMode = TIM_OCMODE_PWM1;
+sConfigOC.Pulse = 250;  // 25% duty
+HAL_TIM_PWM_ConfigChannel(&htim, &sConfigOC, TIM_CHANNEL_1);
+HAL_TIM_PWM_Start(&htim, TIM_CHANNEL_1);
+```
 
-/* 传感器数据结构 */
-typedef struct {
-    uint32_t seq;
-    int16_t  value;
-    TickType_t timestamp;
-} SensorMsg_t;
+### 6.6 电机分类与驱动方式
 
-/* 传感器采集任务：周期性采样并发送到队列 */
-void vSensorTask(void *pvParameters) {
-    SensorMsg_t msg;
-    TickType_t xLastWakeTime = xTaskGetTickCount();
-    const TickType_t xPeriod = pdMS_TO_TICKS(100); // 100 ms
+| 电机类型 | 驱动方式 | 转速控制 | 位置精度 | 成本 | 典型应用 |
+|----------|---------|---------|----------|------|----------|
+| 有刷 DC | H 桥 + PWM | 连续 | 需编码器 | 低 | 轮式机器人 |
+| 无刷 DC (BLDC) | 三相逆变器/ESC | 连续 | 需编码器 | 中 | 无人机、高速电机 |
+| 步进电机 | 步进驱动器 STEP/DIR | 离散步进 | 开环高 | 中 | 3D 打印机、CNC |
+| 舵机 | 内置驱动，50Hz PWM | 角度定位 | 内置电位器 | 低 | 机械臂关节 |
 
-    for (;;) {
-        // 模拟采样
-        msg.seq = xTaskGetTickCount();
-        msg.value = read_sensor_raw();
-        msg.timestamp = xTaskGetTickCount();
+```bob
+  "H \u6865\u7535\u8def\u539f\u7406\uff08\u6709\u5237 DC \u7535\u673a\u9a71\u52a8\uff09"
 
-        // 非阻塞发送或有限等待
-        xQueueSend(xDataQueue, &msg, pdMS_TO_TICKS(10));
-        vTaskDelayUntil(&xLastWakeTime, xPeriod);
-    }
-}
+     "V+"                            "V+"
+      |                               |
+  +---+---+                       +---+---+
+  | "Q1"  |                       | "Q3"  |
+  | "(\u4e0a)" |                       | "(\u4e0a)" |
+  +---+---+                       +---+---+
+      |                               |
+      +\u2500\u2500\u2500\u2500\u2500\u2500\u2500[ "\u7535\u673a M" ]\u2500\u2500\u2500\u2500\u2500\u2500\u2500+
+      |                               |
+  +---+---+                       +---+---+
+  | "Q2"  |                       | "Q4"  |
+  | "(\u4e0b)" |                       | "(\u4e0b)" |
+  +---+---+                       +---+---+
+      |                               |
+     "GND"                           "GND"
 
-/* 数据处理/发送任务 */
-void vCommTask(void *pvParameters) {
-    SensorMsg_t recv;
-    for (;;) {
-        if (xQueueReceive(xDataQueue, &recv, portMAX_DELAY) == pdPASS) {
-            // 使用互斥资源保护共享外设
-            if (xSemaphoreTake(xResourceMutex, pdMS_TO_TICKS(50)) == pdPASS) {
-                uart_send_formatted(&recv);
-                xSemaphoreGive(xResourceMutex);
-            }
-        }
-    }
-}
+  "\u6b63\u8f6c: Q1+Q4 \u5bfc\u901a"    "\u53cd\u8f6c: Q2+Q3 \u5bfc\u901a"
+  "\u5236\u52a8: Q1+Q3 \u6216 Q2+Q4 \u5bfc\u901a"
+```
 
-/* 串口中断示例：接收数据并通知任务 */
-void USART_IRQHandler(void) {
-    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-    uint8_t byte = uart_hw_read_byte();
+- 有刷直流电机（Brushed DC Motor）
+  - 驱动方法：常用 H 桥（H-bridge）进行方向控制与 PWM 调速；PWM 控制电压，配合电流检测与限流保护。开关 MOSFET/晶体管需加续流二极管或使用带续流路径的桥堆。
+  - 优点：驱动简单、成本低；缺点：有刷部件易磨损、寿命受限。
+- 无刷直流电机（BLDC / Brushless Motor）
+  - 驱动方法：三相逆变器（电子换向器），通常使用外部 ESC（电调）或 MCU+驱动器实现六步/FOC 控制。输入信号可以是标准伺服 PWM（1-2ms）、OneShot/DShot 等。
+  - FOC（Field-Oriented Control）可获得更高效率、更平稳的转矩输出。
+- 步进电机（Stepper Motor）
+  - 驱动方法：步进驱动器（如 A4988、DRV8825、TMC 系列），通过细分步进与电流限制实现精确位置控制。驱动器通常接收 STEP/ DIR 信号或 SPI 控制（高级驱动器）。
+- 舵机（Servo）
+  - 驱动方法：典型舵机内部集成直流电机与减速箱，外部通过 50Hz PWM（1~2ms）控制角度；现代数字舵机也支持高速信号或串行协议。
 
-    // 将接收字节发送到队列（从 ISR）
-    xQueueSendFromISR(xRxQueue, &byte, &xHigherPriorityTaskWoken);
+### 6.7 行星（Y）电机及其驱动注意事项
+- 行星（Y 或 Wye）连接常见于三相电机：三相绕组一端并联为公共点（中性点），另一端接三相电源或逆变器相输出。
+- 与三角形（Δ）连接对比：行星在相电压更低（相电压 = 线电压 / √3），适合高压或需要较低相电流的场景；三角形更适合低压高电流场景。
+- 驱动要点：三相逆变器需对三相绕组做 PWM 调制（正弦 PWM 或空间矢量 PWM），并处理换向、过流保护、死区时间等问题。带中性点的测量/监控可用于故障检测与更多控制策略。
 
-    // 如果有更高优先级任务被唤醒，则请求上下文切换
-    portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
-}
+### 6.8 驱动器硬件设计要点
+- MOSFET/IGBT 选择：注意导通损耗与开关损耗、门极驱动能力、耐压与电流余量。
+- 死区时间（Dead-time）：防止高低侧同时导通造成直通短路，特别在半桥或逆变器设计中必不可少。
+- 续流/自由轮路径：电机感性负载需要合适续流路径，或在硬件上配置续流二极管/同步整流 MOSFET。
+- 电流检测与限流：使用电阻/霍尔/专用放大器进行闭环电流控制与过流保护。
+- EMI/滤波：PWM 切换引入高频噪声，需要布局、滤波（LC）与共模抑制设计。
 
-/* main 函数创建资源并启动调度 */
-int main(void) {
-    platform_hw_init();
+### 6.9 工程例子：轮式机器人驱动电机
+- 场景：差速驱动的两轮或四轮机器人，使用有刷直流电机或无刷直流电机。
+- 常见做法（有刷 DC）:
+  - 硬件：电机 + H 桥驱动器（L298、DRV8871、TB6612、或 MOSFET H 桥）。
+  - 控制：主控通过 PWM 控制占空比以调速，通过 DIR/EN 或 H 桥控制方向。编码器用于闭环速度/位置控制（PID）。
+  - 保护：加速度限制、过流检测、欠压锁定（UVLO）与反接保护。
 
-    xDataQueue = xQueueCreate(16, sizeof(SensorMsg_t));
-    xRxQueue   = xQueueCreate(64, sizeof(uint8_t));
-    xResourceMutex = xSemaphoreCreateMutex();
+示例控制伪代码：
 
-    xTaskCreate(vSensorTask, "Sensor", configMINIMAL_STACK_SIZE+128, NULL, tskIDLE_PRIORITY+2, &xSensorTaskHandle);
-    xTaskCreate(vCommTask, "Comm", configMINIMAL_STACK_SIZE+256, NULL, tskIDLE_PRIORITY+1, &xCommTaskHandle);
-
-    vTaskStartScheduler();
-    for(;;);
+```c
+// 设置目标速度 -> 根据 PID 输出得出 PWM 占空比与方向
+if (pid_output >= 0) {
+  set_dir_forward();
+  set_pwm(pid_output);
+} else {
+  set_dir_backward();
+  set_pwm(-pid_output);
 }
 ```
 
-代码要点说明：
+- 无刷 BLDC 作差速驱动时通常使用小型 ESC 或专用三相驱动器，若自己实现需注意电子换向与闭环速度控制。
 
-- 任务优先级分配：采样任务优先级高于通信任务以保证周期性采样及时进行；通信任务抢占性较低以避免占用长时间串口发送影响采样。
-- ISR 使用 xQueueSendFromISR 以确保中断安全；使用 portYIELD_FROM_ISR 请求调度器决定是否切换到更高优先级任务。
-- 互斥资源保护共享外设（xResourceMutex），减少并发操作导致的竞态。
+### 6.10 工程例子：多旋翼（无人机）驱动
+- 场景：多旋翼（四轴、六轴等）使用小型高转速 BLDC 电机与外置 ESC。
+- 驱动方式：飞控通过 PWM（或更高速的数字协议如 DShot）向 ESC 发送油门信号，ESC 负责电机的换向、转速控制与低层闭环（基于背 EMF 或霍尔/传感器）。
+- 特点与要求：高响应、低延迟的信号更利于飞控稳定；电调需支持足够的电流与功率（关注持续电流与峰值电流）；电源与电调需合理布局以降低干扰。
 
-时序图（传感器采样到发送）
+示例：ESC 控制信号
+- 传统伺服 PWM：1ms(停止) ~ 2ms(全油门)，频率约 50Hz 到 400Hz（取决于 ESC）。
+- DShot：数字协议，无需模拟 PWM，误差低且延迟小，广泛用于竞速与现代飞控系统。
 
-```mermaid
-sequenceDiagram
-    participant SensorTask
-    participant Queue
-    participant CommTask
-    participant UART
-    SensorTask->>Queue: xQueueSend(data)
-    Queue-->>CommTask: xQueueReceive -> CommTask unblocked
-    CommTask->>UART: uart_send
-    UART->>UART: 中断触发发送完成
-```
+工程注意事项：
+- 电调校准、动力匹配（电机-螺旋桨-电调-电池）是保证飞行安全的关键。
+- 电源布线、滤波与 BEC（如需）设计也影响系统可靠性。
 
-工程验证建议：
+### 6.11 实验与练习建议
+1. 使用单片机定时器生成 PWM，控制直流电机的转速并通过编码器实现速度闭环（PID）。
+2. 使用三相逆变器或 ESC 控制小型 BLDC，尝试观察不同 PWM 协议（PWM/OneShot/DShot）的响应差异。
+3. 设计并测试 H 桥的热耗、开关损耗与加装电流限流保护。
+4. 对比行星与三角形连接电机的相电压与性能差异（在安全范围内实验）。
 
-- 使用 Segger SystemView 或 FreeRTOS+Trace 验证任务切换时序与阻塞分布；
-- 在不同负载下测试优先级分配与最大响应延迟；
-- 对关键路径使用静态分析与栈深度测量，启用堆栈溢出检测以避免运行时异常。
-
----
-
-### 6.10 本章小结
-
-- FreeRTOS 提供了轻量、可移植且工程化的实时内核，适合资源受限的嵌入式实时系统。核心技能包括任务划分与优先级设计、线程安全的通信同步、ISR 与任务的协同、以及合理的内存分配策略。
-- 工程实现中需关注优先级反转、内存碎片、ISR 执行时间以及调试/追踪策略，以保证系统的确定性与可靠性。
+### 6.12 参考资料
+- 电力电子、功率半导体与电机驱动相关书籍与资料
+- 各类电机驱动器与 ESC 的数据手册
+- STM32、Arduino 等平台 PWM 与定时器应用示例
 
 ---
 
-### 6.11 参考资料与延伸阅读
+### 6.13 本章测验
 
-- FreeRTOS 官方文档与 API 参考（https://www.freertos.org）
-- Real Time Concepts for Embedded Systems — Qing Li（参考实时系统理论）
-- Segger SystemView / FreeRTOS+Trace 用户手册
-
----
-
-### 6.12 本章测验
-
-<div id="exam-meta" data-exam-id="chapter6" data-exam-title="第六章 FreeRTOS机器人实时操作系统测验" style="display:none"></div>
+<div id="exam-meta" data-exam-id="chapter8" data-exam-title="第八章 机器人运动与电机驱动测验" style="display:none"></div>
 
 <!-- mkdocs-quiz intro -->
 
 <quiz>
-1) FreeRTOS 中哪一种对象适合用于保护对共享外设的互斥访问并支持优先级继承？
-- [ ] Queue
-- [ ] Binary Semaphore
-- [x] Mutex
-- [ ] EventGroup
+1) PWM（脉宽调制）的等效平均电压计算公式是：
+- [ ] Vavg = Vcc × Frequency
+- [x] Vavg = Vcc × DutyCycle
+- [ ] Vavg = Vcc / DutyCycle
+- [ ] Vavg = Vcc × (1 - DutyCycle)
 
-正确。Mutex 专门用于互斥保护且支持优先级继承，二值信号量用于事件通知，队列用于数据传递，事件组用于多位事件同步。
+正确。PWM 的平均电压等于电源电压乘以占空比，这是驱动电机和控制 LED 亮度的基础原理。
 </quiz>
 
 <quiz>
-2) 以下哪些说法关于 FreeRTOS 的 heap_4 内存管理是正确的？
-- [x] 支持释放内存
-- [ ] 不合并空闲块
-- [ ] 适合存在内存碎片问题的系统
-- [x] 提供内存合并功能以减少碎片
+2) 在电机驱动中，"低通响应"视角下 PWM 能等效为直流电平的原因是：
+- [ ] 电机转子的电气响应很快
+- [x] 电机转子和惯性系统对 PWM 高频分量响应慢，只响应平均分量
+- [ ] PWM 频率远低于系统带宽
+- [ ] 电机自带整流电路
 
-正确。heap_4 实现了释放与内存合并，能在一定程度上减少碎片；因此支持释放内存和提供内存合并功能以减少碎片是正确的。
+正确。当 PWM 频率远高于机械系统带宽时，电感、电容和机械惯性会滤除高频分量，只响应平均电压。
 </quiz>
 
 <quiz>
-3) 在 ISR 中调用 FreeRTOS API 时需要注意哪些要素？
-- [x] 只能使用 FromISR 后缀的 API
-- [x] 避免长时间阻塞或复杂处理
-- [x] 如果 ISR 唤醒了更高优先级任务需显式请求上下文切换
-- [ ] 可以在 ISR 中直接调用所有 FreeRTOS API
+3) 有刷直流电机最常用的驱动电路是：
+- [ ] 单晶体管电路
+- [x] H 桥（H-bridge）电路
+- [ ] 三端稳压器
+- [ ] 线性放大器
 
-正确。只能使用 FromISR 后缀的 API（这些 API 为中断上下文设计，确保线程安全）；避免长时间阻塞或复杂处理（中断应尽快返回，复杂处理应交由任务完成）；如果 ISR 唤醒了更高优先级任务需显式请求上下文切换（portYIELD_FROM_ISR）。
+正确。H 桥电路可以通过控制四个开关管的导通状态，实现电机的正反转和 PWM 调速。
 </quiz>
 
 <quiz>
-4) 针对本章工程实例（传感器网关），系统出现偶发性数据丢失时，可能的改进措施有哪些？
-- [x] 增大队列深度或改用指针传递以减少内存拷贝开销
-- [x] 调整任务优先级或拆分串口发送策略
-- [x] 在 ISR 中尽量只做数据缓存并尽快退出，复杂解析交由任务完成
-- [ ] 禁用所有中断以避免竞态
+4) 无刷直流电机（BLDC）的驱动方式通常使用：
+- [ ] H 桥电路
+- [x] 三相逆变器（电子换向器）
+- [ ] 单晶体管电路
+- [ ] 线性电源
 
-正确。增大队列深度或改用指针传递、调整任务优先级或拆分串口发送策略、在 ISR 中尽量只做数据缓存都是有效的改进措施。
+正确。BLDC 需要三相逆变器进行电子换向，通常配合 ESC（电调）或专用驱动器使用。
 </quiz>
+
+<quiz>
+5) 舵机（Servo）的典型控制信号是：
+- [x] 50Hz PWM，脉冲宽度 1~2ms 对应不同角度
+- [ ] 1kHz PWM，占空比 0~100%
+- [ ] 模拟电压 0~5V
+- [ ] I2C 通信指令
+
+正确。传统舵机使用 50Hz PWM 信号，1ms 对应 0 度，2ms 对应 180 度（或最大角度）。
+</quiz>
+
+<quiz>
+6) 在半桥或全桥驱动电路中，死区时间（Dead-time）的作用是：
+- [ ] 提高 PWM 频率
+- [x] 防止上下桥臂同时导通造成电源短路
+- [ ] 增加电机转矩
+- [ ] 降低功耗
+
+正确。死区时间确保一个桥臂完全关断后另一个桥臂才导通，避免直通短路。
+</quiz>
+
+<quiz>
+7) 步进电机的驱动通常需要：
+- [ ] 直流电压源直接连接
+- [x] 步进驱动器（如 A4988、DRV8825）接收 STEP/DIR 信号
+- [ ] 标准伺服 PWM 信号
+- [ ] 三相逆变器
+
+正确。步进电机需要专用驱动器，通过 STEP 脉冲控制步数，DIR 信号控制方向。
+</quiz>
+
+<quiz>
+8) 以下关于行星（Y）连接电机的描述，正确的是：
+- [x] 相电压 = 线电压 / √3，适合高压场景
+- [ ] 相电流 = 线电流 / √3
+- [ ] 只能用于 BLDC 电机，不能用于步进电机
+- [ ] 比三角形连接的电机转矩更大
+
+正确。行星连接的相电压更低，适合高压应用；三角形连接相电压等于线电压，适合低压大电流场景。
+</quiz>
+
+<quiz>
+9) 多旋翼无人机的电调（ESC）通常使用什么信号接收油门指令？
+- [ ] I2C 通信
+- [x] PWM（或更高速的数字协议如 DShot）
+- [ ] SPI 通信
+- [ ] UART 串口
+
+正确。传统 ESC 使用 50~400Hz PWM，现代竞速无人机常用 DShot 等高速数字协议。
+</quiz>
+
+<quiz>
+10) 对于电机感性负载，续流路径（Freewheeling Path）的作用是：
+- [ ] 提高电机转速
+- [x] 在开关管关断时为电感电流提供回路，防止电压尖峰损坏器件
+- [ ] 增加电机转矩
+- [ ] 降低 PWM 频率
+
+正确。电机是感性负载，电流不能突变，续流二极管或同步整流 MOSFET 提供电流回路，保护开关器件。
+</quiz>
+
+<!-- mkdocs-quiz results -->
+
 
 ---
 
-*注：本章中所有图形使用 Mermaid 语法描述，便于在 mkdocs-material 等支持 Mermaid 的主题中直接渲染。如需矢量图（SVG/PNG）或更精细的时序图，可在后续版本中补齐工程级图像资源。*
+（本章为综合性工程级概述，具体项目请结合目标电机、电源与驱动器手册进行设计与验证。）

@@ -2,467 +2,484 @@
 number headings: first-level 2, start-at 5
 ---
 
-## 5 第五章 嵌入式基于 Renode 仿真器的高级仿真编程
+## 5 第5章 STM32 定时器的应用
 
-本章核心内容：介绍 Renode 仿真器的体系结构与高级特性，深入讲解面向研究生层次的高保真嵌入式仿真方法、可重复性测试与自动化验证流程，并通过工程实例说明如何用 Renode 建立端到端仿真环境来开展固件验证、外设注入与系统级时序分析。章节以“导入—讲解—总结—测试”结构组织，强调图形化呈现与精炼理论推导，并提供可运行的脚本与核心代码，便于工程复现与拓展。
+### 5.1 简介
+定时器（Timer）是 STM32 外设中非常重要的部分，用于产生精确的时间基准、PWM 信号、输入捕获、编码器接口、事件触发以及与中断/DMA 协同工作。通过调整时钟分频（Prescaler）和自动重装值（ARR），可以灵活地控制计数周期与分辨率。
 
-学习目标
-- 掌握 Renode 的核心架构、组件模型与仿真工作流，能够在研究级实验中基于 Renode 构建可重复、可观察的仿真平台。
-- 理解仿真中时序、外设模型、非确定性行为与断点/检查点技术，能够进行高保真外设注入、时序验证与性能测量。
-- 熟悉 Renode 的 RESC 脚本与 Python 控制接口（Renode Python API），能够编写自动化测试用例、集成 CI/CD 验证流程，并将仿真用于固件回归测试与故障注入实验。
-- 能够将 Renode 与调试器（GDB）、测试框架和网络代理（如 MQTT Broker）联动，完成复杂工程场景下的联合验证。
+### 5.2 定时器基础概念
 
-本章重点与难点
-- 重点：外设建模与时序验证方法、RESC/ Python 自动化脚本、仿真与调试链的集成、可重复性与检查点机制。
-- 难点：高保真时钟/中断时序建模、跨域（外设/CPU/总线）事件注入与同步验证、保证仿真可重现性的实践技巧。
+STM32 定时器的核心信号路径如下：
 
-章节结构
-5.0 引言与目标（本节）  
-5.1 Renode 概述与体系（架构图 + 表格对比）  
-5.2 高级仿真概念与时序建模（时序图、时钟/中断、总线争用）  
-5.3 Renode 脚本与 Python 自动化（RESC 语法要点、Python API 模式）  
-5.4 仿真外设注入与故障注入策略（流程图 + 代码）  
-5.5 工程实例：工业物联网网关仿真（背景、架构图、流程、核心代码、时序图）  
-5.6 与调试与 CI 集成（GDB/CI 流程表）  
-5.7 本章小结与拓展方向  
-5.8 测试题（mkdocs-quiz 风格，含答案与解释）
-
-——
-
-### 5.1 Renode 概述与体系
-
-5.1.1 Renode 的定位
-- Renode 是面向嵌入式系统的系统级仿真与验证平台，适合跨主机架构（ARM Cortex-M、RISC-V、Intel 等）进行多外设、多片上系统（SoC）联合仿真，强调可观察性、可脚本化与自动化验证能力。  
-- 研究与工程价值：在固件开发周期中替代或补充实物验证，以低成本、可重复、可注入故障的方式实现系统级测试、回归测试与研究性试验。
-
-5.1.2 体系结构（图形优先）
-- 建议插图：Renode 架构组件图（仿真内核、设备模型库、RESC 脚本解析器、Python 控制接口、GDB/串口/网络桥接、监测/日志模块）。
-
-Mermaid 流程图（表示组件关系，课堂中请配合图像资源）
-```mermaid
-flowchart LR
-  A[RESC / Python Controller] --> B[Renode Core]
-  B --> C[Machine Model]
-  C --> D[CPU Model]
-  C --> E[Peripheral Models]
-  C --> F[Bus / Interconnect]
-  B --> G[Monitors / Analyzers]
-  B --> H[Debug Bridges (GDB, OpenOCD)]
-  B --> I[External Connectors (TCP/Serial/Socket)]
+```bob
+  "APB \u603b\u7ebf\u65f6\u949f"      "Prescaler"       "\u8ba1\u6570\u5668"          "ARR"
+      |               |              |              |
+      v               v              v              v
+  +--------+    +-----------+    +--------+    +---------+
+  |"72 MHz"|───→|"PSC=71"   |───→|"1 MHz" |───→|"ARR=999"|
+  +--------+    |"÷(PSC+1)" |    |"\u8ba1\u6570\u65f6\u949f"|    |"\u5468\u671f=1ms"|
+                +-----------+    +----+---+    +---------+
+                                      |
+                                      v
+                              +-------------+
+                              | "CCR=500"   |
+                              | "\u5360\u7a7a\u6bd4 50%" |
+                              +-------------+
 ```
 
-5.1.3 与其他仿真器对比（表格次之）
-- 下表比较 Renode、QEMU 与基于硬件的仿真/仿真加速器的典型特性（供教学对比分析）：
+| 寄存器 | 缩写 | 功能 | 计算公式 |
+|--------|------|------|----------|
+| 预分频器 | PSC | 分频时钟 | $f_{cnt} = f_{clk} / (PSC + 1)$ |
+| 自动重装载 | ARR | 设定周期 | $T = (ARR + 1) / f_{cnt}$ |
+| 捕获/比较 | CCR | 设定占空比或捕获时刻 | $Duty = CCR / (ARR + 1)$ |
 
-| 特性 | Renode | QEMU | 硬件在环 / FPGA 仿真 |
-|---:|:---:|:---:|:---:|
-| 外设建模灵活性 | 高（可自定义模型、脚本注入） | 中（需修改源码或设备模型） | 取决于外设实现 |
-| 脚本化/自动化能力 | 强（RESC + Python） | 弱/需扩展 | 中等（需自定义接口） |
-| 多节点 / 多总线仿真 | 易（支持虚拟网络/总线） | 受限 | 需要硬件设计 |
-| 调试桥接（GDB 等） | 支持 | 支持 | 支持/需适配 |
-| 可重复性（检查点） | 支持 | 部分支持 | 依赖硬件能力 |
-| 学术/教学便捷性 | 高 | 较高 | 低（成本高） |
+- 时钟来源：APB1 / APB2 总线时钟，经预分频后进入定时器。注意不同系列定时器的时钟倍频特性。
+- 预分频器（Prescaler）：决定计数器时钟频率。计数器时钟 = 定时器时钟 / (Prescaler + 1)。
+- 自动重装载寄存器（ARR）：决定计数周期，当计数器达到 ARR 时产生更新事件（Update Event）。
+- 捕获/比较寄存器（CCR）：用于输入捕获或输出比较/PWM 的占空比设置。
 
-5.1.4 小结
-- Renode 的优势在于“外设可脚本化”、“高可观察性”与“便于自动化验证”，适用于研究生层次开展系统级固件验证、协议验证与故障注入研究。
+### 5.3 计数模式
 
-——
-
-### 5.2 高级仿真概念与时序建模
-
-5.2.1 时钟与定时（图形优先）
-- 关键点：仿真中需要明确主时钟、外设时钟与软件定时源（SysTick、定时器）；不同时钟域间的同步与漂移会影响中断到处理的延迟。  
-- 推荐图形：多时钟域时序图，标注时钟频率、tick 到达、外设就绪信号与中断触发点。
-
-Mermaid 时序图（定时器触发 I2C 采样 -> 中断 -> UART 发送）
-```mermaid
-sequenceDiagram
-  participant Timer
-  participant I2C
-  participant CPU
-  participant UART
-  Note over Timer,I2C: Timer tick (every 1ms)
-  Timer ->> I2C: request sample
-  I2C -->> CPU: DMA transfer / IRQ (data ready)
-  CPU ->> UART: send packet
-  UART -->> ExternalMonitor: transmit
+```bob
+  "\u5411\u4e0a\u8ba1\u6570"              "\u5411\u4e0b\u8ba1\u6570"            "\u4e2d\u5fc3\u5bf9\u9f50"
+  "CNT"                  "CNT"                 "CNT"
+    |   /|  /|  /|         | \  |\  |\           |   /\    /\
+    |  / | / | / |         |  \ | \ | \          |  /  \  /  \
+    | /  |/  |/  |         |   \|  \|  \         | /    \/    \
+    |/   '   '   |         |    '   '   \        |/     '      \
+    +---+---+---+→         +---+---+---+→        +---+---+---+→
+      "ARR"  "ARR"           "ARR"  "ARR"           "ARR"
+    "\u4e0a\u6ea2\u4e8b\u4ef6"            "\u4e0b\u6ea2\u4e8b\u4ef6"           "\u53cc\u8fb9\u5bf9\u79f0 PWM"
 ```
 
-5.2.2 中断处理与优先级（文字补充 + 时序图）
-- 说明：需建模硬件中断延迟（从外设事件到中断线上升的延迟）、优先级抢占、ISR 执行时间与中断嵌套的影响。使用时序图展示“外设事件 -> NVIC -> ISR -> DSR/Deferred work”。
+| 模式 | CNT 方向 | 更新事件 | 典型应用 |
+|------|----------|----------|----------|
+| 向上计数 | 0 → ARR | 溢出时 | 通用定时/PWM |
+| 向下计数 | ARR → 0 | 下溢时 | 特殊同步场景 |
+| 中心对齐 | 0 → ARR → 0 | 上下溢均可 | 电机控制对称 PWM |
 
-5.2.3 总线与外设争用
-- 关键点：在多主设备或 DMA 存在的系统中，总线争用会引入额外的访问延时，影响系统实时性。应在仿真中配置带宽、突发传输与仲裁策略以逼近真实行为。
+- 向上计数（Upcounting）
+- 向下计数（Downcounting）
+- 中心对齐模式（Center-aligned）：用于生成对称 PWM 或定时同步场景
 
-5.2.4 非确定性与可重复性
-- 方法要点：使用固定随机种子、禁用/控制非确定性事件（如系统时间源）、使用检查点（snapshot）和回放机制保证回归测试可复现。
+### 5.4 输出比较与 PWM
+输出比较 (Output Compare) 可用于生成 PWM 信号和定时输出。PWM 的占空比由 CCRx 与 ARR 的比值决定。
 
-5.2.5 性能与量化指标
-- 建议监测项：中断响应时间分布、任务切换延时、外设传输吞吐与错误率等，使用 Renode 的监测器（analyzers）和日志导出后做统计分析。
-
-——
-
-### 5.3 Renode 脚本与 Python 自动化
-
-5.3.1 RESC（Renode Script）语言要点（图表+代码）
-- RESC 是 Renode 的主脚本语言，用于定义机器、加载固件、连接外设、启用分析器与断点。RESC 脚本常用于场景初始化与一次性仿真配置。
-
-示例 RESC（简化平台加载与串口连接）
-```resc
-# RESC 脚本：创建机器，加载平台描述与固件，导出 UART 到 TCP
-using sysbus
-
-mach create "stm32-sim"
-machine LoadPlatformDescription @platforms/cpus/stm32f4.repl
-
-# 加载固件（本地路径或相对路径）
-sysbus LoadELF @./build/firmware.elf
-
-# 启用串口分析器，将 uart1 输出映射到 TCP 方便外部监听
-showAnalyzer sysbus.uart1
-connector Connect sysbus.uart1 tcp:127.0.0.1:2000
-
-# 启动仿真
-start
-```
-注：平台描述文件路径（@platforms/...）取决于 Renode 安装与平台库；上述脚本展示典型工作流，真实使用时按本地平台文件调整路径。
-
-5.3.2 Python 控制接口（自动化、断言、回归）
-- Renode 提供 Python 接口（Renode as a service / Python API），用于在测试框架中驱动仿真、注入数据、收集 trace 并断言行为。下述示例示范用 Python 驱动仿真、注入 I2C 数据并断言 UART 输出。
-
-示例 Python 自动化（伪代码，需按环境安装 renode-python bindings 或通过 subprocess 调用 renode-cli）
-```python
-"""
-Python 测试示例（伪代码，适配具体 Renode Python API）
-功能：启动仿真、注入 I2C 传感器读数、等待 UART 输出并断言包含预期数据
-"""
-from renode import Renode  # 视具体绑定而定
-import time
-import re
-
-r = Renode()
-r.execute_script("scripts/init_stm32.resc")  # 载入 RESC 场景
-r.start()
-
-# 注入 I2C 传感器数据（通过仿真注入接口）
-sensor_payload = [0x01, 0x02, 0x03, 0x04]
-r.inject_i2c("sysbus.i2c0", address=0x50, data=sensor_payload)
-
-# 等待 UART 输出并收集
-uart_output = r.read_uart("sysbus.uart1", timeout=2.0)
-assert re.search(r"sensor: 0x01020304", uart_output), "UART 输出不包含传感器数据"
-
-# 生成检查点（snapshot）
-r.create_snapshot("post_sample")
-
-r.stop()
-```
-说明：上例展示了测试断言与检查点使用的范式，实际 API 名称请参照所用 Renode 版本的 Python binding 文档。
-
-5.3.3 调试桥与 GDB 集成  
-- 说明：通过 Renode 可以暴露 GDB server 端口，允许在 IDE（如 VSCode）或命令行 GDB 上进行断点调试、寄存器查看与单步执行，便于定位复杂时序或外设交互问题。
-
-示意 RESC 命令（打开 GDB）
-```resc
-# 启用 GDB server（默认 3333）
-gdbServerStart 3333
-```
-在本地使用 `arm-none-eabi-gdb` 或 `riscv64-unknown-elf-gdb` 连接到该端口并调试固件。
-
-——
-
-### 5.4 仿真外设注入与故障注入策略
-
-5.4.1 注入类型与目的（表格）
-| 注入类型 | 目标 | 常见用途 |
-|---:|:---:|:---:|
-| 时序偏移注入 | 测试实时性 | 验证系统在延迟/抖动下的鲁棒性 |
-| 位翻转/数据错误 | 验证容错 | 验证校验与重传策略 |
-| 外设失效（丢失响应） | 验证异常处理 | 检验超时与降级逻辑 |
-| 总线争用/带宽限制 | 验证性能极限 | 测量任务延迟增长 |
-
-5.4.2 注入流程（图形优先）
-- 推荐流程图：注入场景设计 -> 编写注入脚本 -> 执行仿真并收集指标 -> 自动断言（通过/失败）-> 生成报告并回退检查点。
-
-Mermaid 流程图
-```mermaid
-flowchart TD
-  A[设计注入场景] --> B[实现注入脚本 (RESC/Python)]
-  B --> C[运行仿真并开始采样]
-  C --> D[收集日志、trace、指标]
-  D --> E[断言 & 评估]
-  E --> F{通过?}
-  F -- yes --> G[保存结果/检查点]
-  F -- no --> H[回退/重试/记录失败]
-```
-
-5.4.3 实施示例：注入 I2C 超时
-RESC + Python 混合使用示例伪代码：
-- RESC：配置机器、映射 I2C
-- Python：在关键时刻禁用 I2C 响应（模拟外设挂起），观察固件的超时处理逻辑并断言
-
-——
-
-### 5.5 工程实例：基于 Renode 的工业物联网（IIoT）采集网关仿真
-
-5.5.1 实例背景（工程价值）
-- 场景：工业现场有多路传感器（通过 I2C/ADC）、周期性采样并通过串口转发给上层网关，同时通过以太网或 MQTT 上报云端。固件需保证在外设异常（I2C 时序错误、突发总线延迟）下的鲁棒性，并在采样失败时正确记录错误并重试。  
-- 工程价值：通过 Renode 完成端到端仿真，可以在无实物或在硬件不可达条件下验证固件策略、实现自动化回归测试，并进行故障注入实验来评估系统可靠性。
-
-5.5.2 系统架构（图形优先）
-Mermaid 架构图（简化）
-```mermaid
-flowchart LR
-  A[模拟传感器群 (I2C)] -->|I2C| B[MCU (Cortex-M)]
-  B -->|UART| C[Serial to TCP Bridge]
-  C -->|MQTT| D[MQTT Broker (模拟)]
-  B -->|SPI| E[外部 Flash / DMA]
-  subgraph Renode Host
-    B
-    C
-  end
-  subgraph 外部测试脚本
-    F[Python Test Harness]
-  end
-  F -->|控制/注入| A
-  F -->|检查| C
-```
-
-5.5.3 核心设计思路
-- MCU 固件模块划分：采样任务（定时器触发）、数据打包与发送模块、错误处理模块（超时/重试/告警）、持久化与回退（外部 flash）。  
-- 仿真角度聚焦：准确建模 I2C 读取时序、注入 I2C 超时、验证 UART 输出格式与上报逻辑，以及在出现超时后固件的恢复/重试行为。
-
-5.5.4 关键流程（流程图）
-```mermaid
-sequenceDiagram
-  participant Timer
-  participant MCU
-  participant I2C_Sensor
-  participant UART
-  Timer ->> MCU: tick (采样周期)
-  MCU ->> I2C_Sensor: I2C read
-  alt I2C success
-    I2C_Sensor -->> MCU: data
-    MCU ->> UART: send packet
-  else I2C timeout
-    MCU ->> MCU: increment retry counter
-    MCU ->> UART: send error log
-  end
-```
-
-5.5.5 核心固件代码（C，示例聚焦中断/采样与 UART 发送）
-- 代码风格遵循嵌入式 C 规范（注释、边界检查、错误处理）
+示例：基于 HAL 的简要 PWM 初始化与启动（伪代码）：
 
 ```c
-/* sample_core.c
- * 功能：定时器 ISR 触发采样，通过 I2C 读取传感器并经 UART 发出
- * 适配：基于 HAL 风格接口抽象（伪代码，便于移植）
- */
+// 假设使用 TIM2, 计数频率为 1MHz, 周期 1000 -> 1kHz PWM
+TIM_HandleTypeDef htim2;
+htim2.Instance = TIM2;
+htim2.Init.Prescaler = 79;           // 如果 APB1 时钟 80MHz -> 计数时钟 1MHz
+htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
+htim2.Init.Period = 999;             // ARR
+HAL_TIM_PWM_Init(&htim2);
 
-#include <stdint.h>
-#include <stdbool.h>
-#include "hal_timer.h"
-#include "hal_i2c.h"
-#include "hal_uart.h"
-#include "hal_flash.h"
+TIM_OC_InitTypeDef sConfigOC = {0};
+sConfigOC.OCMode = TIM_OCMODE_PWM1;
+sConfigOC.Pulse = 500;               // CCRx -> 占空比 50%
+sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
+HAL_TIM_PWM_ConfigChannel(&htim2, &sConfigOC, TIM_CHANNEL_1);
 
-#define SENSOR_I2C_ADDR 0x50
-#define SAMPLE_RETRY_MAX 3
-#define SAMPLE_BUF_SIZE 8
+HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_1);
+```
 
-static uint8_t sample_buffer[SAMPLE_BUF_SIZE];
+注意在实际工程中通常使用 STM32CubeMX 生成初始化代码并在此基础上修改 CCR 值实现占空比控制。
 
-void timer_isr(void) {
-    /* 计时中断：触发采样任务的调度（可设置为 ISR 中直接执行短任务或置位信号量） */
-    // 注意：ISR 应尽量短小，重试/IO 操作应在线程上下文或 DSR 中完成
-    schedule_sample_task();
-}
+### 5.5 输入捕获（Input Capture）
+输入捕获用于测量外部信号的频率、占空比或脉宽。基本思路是将外部事件捕获到 CCR 寄存器并读取捕获值，结合定时器时钟与预分频器计算真实时间。
 
-/* 采样任务（在线程上下文中执行） */
-void sample_task(void) {
-    int attempt = 0;
-    bool success = false;
-    while(attempt < SAMPLE_RETRY_MAX && !success) {
-        if (hal_i2c_read(SENSOR_I2C_ADDR, sample_buffer, SAMPLE_BUF_SIZE) == HAL_OK) {
-            success = true;
-            /* 将数据打包并发送到上层（UART） */
-            char out[64];
-            int len = snprintf(out, sizeof(out), "sensor: 0x%02x%02x%02x%02x\n",
-                               sample_buffer[0], sample_buffer[1],
-                               sample_buffer[2], sample_buffer[3]);
-            hal_uart_write((uint8_t*)out, len);
-        } else {
-            attempt++;
-            if (attempt >= SAMPLE_RETRY_MAX) {
-                /* 记录错误并发送告警 */
-                const char *err = "sensor read error\n";
-                hal_uart_write((uint8_t*)err, strlen(err));
-                /* 可选：持久化错误日志 */
-                hal_flash_log_error(ERR_SENSOR_TIMEOUT);
-            }
-            /* 间隔重试（非阻塞等待，使用任务延时接口） */
-            task_delay_ms(10);
-        }
+示例流程（伪算法）：
+1. 配置通道为输入捕获，设置触发边沿（上升沿/下降沿/双边沿）。
+2. 在捕获中断或 DMA 回调中读取 CCR 值并计算时间间隔。
+3. 根据计数器溢出与预分频计算最终频率/占空比。
+
+```c
+// 简单使用 HAL 获取两次上升沿计数差值
+uint32_t last = 0, now = 0;
+void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim) {
+    if (htim->Channel == HAL_TIM_ACTIVE_CHANNEL_1) {
+        now = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_1);
+        uint32_t diff = (now >= last) ? (now - last) : (now + (htim->Init.Period + 1) - last);
+        // diff 对应计数器刻度, 乘以刻度时间得脉宽
+        last = now;
     }
 }
 ```
 
-代码说明（要点）
-- 在 ISR 中仅做最小工作（唤醒/通知任务），避免阻塞外设操作。
-- 采样重试在任务上下文处理，支持非阻塞等待与持久化日志。
-- UART 输出用于与外部测试脚本断言通信。
+### 5.6 编码器接口（Encoder Interface）
+STM32 提供专用的编码器接口模式（Encoder Mode），可直接把两相正交编码器信号连接到定时器通道，从而高效读取旋转角度和速度。
 
-5.5.6 Renode 场景脚本（RESC，加载固件、注入 I2C 模拟器并连接 MQTT 代理的简化实现）
-```resc
-# init_iot_gateway.resc
-using sysbus
+```bob
+  "A \u76f8"   ___     ___     ___
+        __|   |___|   |___|   |___
+  "B \u76f8"      ___     ___     ___
+           __|   |___|   |___|   |___
+  "\u8ba1\u6570"  0  1  2  3  4  5  6  7  8  "\u2192 \u6b63\u8f6c"
 
-# 创建并加载平台（基于 STM32F4 平台举例）
-mach create "iio-gateway"
-machine LoadPlatformDescription @platforms/cpus/stm32f4.repl
-
-# 加载编译好的固件 ELF
-sysbus LoadELF @./build/iio_gateway.elf
-
-# 将 uart1 映射为 TCP，供外部测试脚本监听
-showAnalyzer sysbus.uart1
-connector Connect sysbus.uart1 tcp:127.0.0.1:4001
-
-# 添加虚拟 I2C 传感器设备并配置初始响应
-i2c_sensor Create sysbus.i2c0 0x50 4  # 假设语法：Create <i2c> <addr> <bytes>
-i2c_sensor SetResponse sysbus.i2c0 0x50 01 02 03 04
-
-# 可选：开启 GDB 用于固件调试
-gdbServerStart 3333
-
-# 启动仿真
-start
-```
-说明：i2c_sensor 的具体创建与设置命令依赖于 Renode 外设模型扩展，上述为示意性命令；真实使用请参照本地 Renode 外设模型 API。
-
-5.5.7 Python 测试驱动（注入 I2C 超时并校验固件响应）
-```python
-# test_iio_gateway.py (伪代码)
-from renode import Renode
-import time
-
-r = Renode()
-r.execute_script("init_iot_gateway.resc")
-r.start()
-
-# 验证正常数据流
-out = r.read_uart("sysbus.uart1", timeout=1.0)
-assert "sensor: 0x01020304" in out
-
-# 注入超时（禁用 I2C 响应）
-r.set_i2c_response("sysbus.i2c0", 0x50, response=None)  # 若 API 支持，表示不响应
-
-# 触发下一次采样（可以通过 advance 或者等待定时器）
-r.advance_time_ms(10)
-
-# 检查告警输出（重试耗尽后的错误日志）
-out = r.read_uart("sysbus.uart1", timeout=2.0)
-assert "sensor read error" in out
-
-r.create_snapshot("after_i2c_timeout")
-r.stop()
+  "4 \u500d\u9891\u8ba1\u6570\u539f\u7406\uff1aA/B \u53cc\u8fb9\u6cbf\u90fd\u8ba1\u6570\uff0c\u6bcf\u5468\u671f 4 \u4e2a\u8ba1\u6570"
 ```
 
-5.5.8 时序验证（时序图）
-- 在注入超时时，对比“期望时序（重试次数、重试间隔）”与“实际仿真时序”，利用 Renode 的 trace 与 analyzer 导出时间戳做统计。
+| 编码器模式 | 计数边沿 | 分辨率 | 适用场景 |
+|-----------|---------|--------|----------|
+| 模式 1 | 仅 TI1 边沿 | ×2 | 低速简单应用 |
+| 模式 2 | 仅 TI2 边沿 | ×2 | 低速简单应用 |
+| 模式 3 | TI1 + TI2 双边沿 | ×4 | **常用**，最高精度 |
 
-——
+配置要点：
+- 将两个通道配置为 TI1/TI2 输入
+- 选择合适的捕获极性和滤波器
+- 使用 16/32 位定时器以满足计数范围需求
 
-### 5.6 与调试与 CI 集成
+### 5.7 定时器中断与 DMA
+- 更新中断（Update Interrupt）：ARR 溢出或手动更新时触发，常用于周期性任务。
+- 捕获/比较中断（CCx）：在捕获或比较事件发生时触发，适用于精确定时处理。
+- DMA：用于高频数据搬运（例如连续捕获、DAC 波形输出），减少 CPU 负担。
 
-5.6.1 GDB / IDE 联动
-- 实践要点：在 RESC 中启用 gdbServerStart，并在 IDE 中配置远程 GDB 连接；使用符号化 ELF 以支持源代码级调试与断点回放。
+### 5.8 多定时器同步与高级功能
+- 主从模式（Master/Slave）用于定时器间同步触发（例如同步 PWM 或采样同步）。
+- 死区时间（Dead-time）与互补输出：用于半桥/全桥驱动，防止上下桥同时导通。
+- 触发 ADC：定时器可作为 ADC 触发源实现精确采样同步。
 
-5.6.2 CI / 回归测试流程（表格与流程）
-流程示例：代码提交 -> 构建固件 -> 启动 Renode 场景并运行 Python 测试套件 -> 生成测试报告 -> 触发告警或合并。
+### 5.9 调试与常见问题
+- 时钟配置错误会导致定时器频率偏差，检查 RCC 与 APB 分频设置。
+- 中断优先级与中断处理耗时会影响高频事件的可靠性，必要时采用 DMA。
+- ARR/Prescaler 设置需避免计数器溢出并兼顾时间分辨率。
 
-表：CI 集成要点
+### 5.10 实验与练习（扩展）
 
-| 步骤 | 关键配置 | 输出 |
-|---|---:|:---|
-| 构建固件 | 可复现的交叉编译脚本 | 固件 ELF / HEX |
-| 启动仿真场景 | RESC 脚本（受版本控制） | 可复现的仿真环境 |
-| 自动化测试 | Python 测试用例 + 断言 | PASS/FAIL, trace |
-| 报告 | 导出日志与波形（UART, traces） | HTML/JSON 报告 |
+下面列出若干针对定时器的教学与工程实验，涵盖从基础到进阶的应用：自制延迟函数、输出比较与呼吸灯、输入捕获与占空比测量、超声波测距、定时器主/从模式（从模式控制器）、编码器实验与占空比测量。每个实验均给出背景、关键实现要点、简化代码与时序/交互图，便于课堂演示与实验室练习。
 
-5.6.3 报告与可追溯性
-- 要保证仿真可复现，需在 CI 中记录：Renode 版本、平台描述、固件 ELF 的 commit hash 与测试脚本版本，以及用于注入的随机种子。
+#### 5.10.1 实验1：基于定时器的自制延迟函数（精确延时）
 
-——
+目的：使用定时器提供比软件循环更精确且低抖动的延时函数，用于有确定性需求的短延时场景。
 
-### 5.7 本章小结与拓展方向
+要点：使用 32 位计数器或配合溢出处理，避免被中断长时间占用影响精度；若需在低功耗下延时，结合睡眠模式并用定时器唤醒更合适。
 
-小结（要点整理）
-- Renode 提供强大的系统级仿真能力，适用于研究生层次开展高保真固件验证、时序分析与故障注入研究。  
-- 有效使用 RESC 脚本与 Python API，可实现自动化测试流水线与 CI 集成。  
-- 仿真中的时钟域、总线争用与中断建模是实现逼真验证的关键；通过检查点与回放机制可保证测试可重复性。
+示例（裸机 HAL 风格）：
 
-拓展建议
-- 深入学习 Renode 自定义设备模型开发（C# / .NET 环境），用于实现研究级外设行为模型；  
-- 将 Renode 与形式化工具（如模型检测器）结合，开展协议验证或状态空间探索；  
-- 在仿真中集成功耗模型与热模型，开展系统级能耗与热稳定性研究。
+```c
+/* 返回以微秒为单位的延时，使用 TIMx 的 1MHz 计数 */
+void delay_us(uint32_t us) {
+    __HAL_TIM_SET_COUNTER(&htimx, 0);
+    HAL_TIM_Base_Start(&htimx);
+    while (__HAL_TIM_GET_COUNTER(&htimx) < us) {
+        // 可在此检查并允许中断发生
+    }
+    HAL_TIM_Base_Stop(&htimx);
+}
+```
 
-——
+注意：当延时较长（数 ms 以上）时优先使用 tick/systicks 或任务延时以避免占用 CPU。
 
-### 5.8 本章测验
+---
 
-<div id="exam-meta" data-exam-id="chapter5" data-exam-title="第五章 Renode高级机器人系统仿真编程测验" style="display:none"></div>
+#### 5.10.2 实验2：输出比较与呼吸灯（PWM 占空比渐变）
+
+目的：掌握 PWM 的动态占空比调整与软硬件结合产生呼吸灯效果。
+
+实现思路：使用定时器 PWM 输出并在定时器中断或软件定时器回调中周期性调整 CCR 值；对于平滑效果，采用三角/正弦波形表或分段线性插值。
+
+示例：基于 HAL 的周期性占空比更新（使用 DMA 或定时器中断）
+
+```c
+// 在 TIM 回调中更新占空比
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
+    static int dir = 1;
+    static uint32_t duty = 0;
+    if (htim->Instance == TIMx) {
+        duty += dir ? 1 : -1;
+        if (duty == 0 || duty == 1000) dir = !dir;
+        __HAL_TIM_SET_COMPARE(&htim_pwm, TIM_CHANNEL_1, duty);
+    }
+}
+```
+
+时序图：
+
+```bob
+  "PWM Timer"          "Period ISR"          "LED"
+       |                    |                   |
+       | "溢出/周期中断"    |                   |
+       +──────────────────→|                   |
+       |                    | "更新 CCR"          |
+       |←──────────────────+                   |
+       | "输出 PWM 波形"    |                   |
+       +──────────────────+──────────────────→|
+       |                    |                   |
+```
+
+优化建议：为平滑视觉效果可在占空比更新中使用非线性（伽马校正或正弦表）映射。
+
+---
+
+#### 5.10.3 实验3：输入捕获与占空比测量
+
+目的：测量外部方波的周期与高电平时间，从而计算频率与占空比（Duty Cycle）。
+
+实现要点：使用捕获上升沿记录周期、捕获下降沿记录高电平时间；处理计数器溢出。可使用双通道捕获或在单通道上交替配置边沿捕获。
+
+代码示例（HAL 回调）：
+
+```c
+volatile uint32_t t_rise = 0, t_fall = 0, period = 0, high_time = 0;
+void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim) {
+    static uint8_t state = 0; // 0: 等待上升, 1: 等待下降
+    uint32_t capture = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_1);
+    if (state == 0) {
+        t_rise = capture; // 上升沿
+        // 切换为捕获下降
+        __HAL_TIM_SET_CAPTUREPOLARITY(htim, TIM_CHANNEL_1, TIM_INPUTCHANNELPOLARITY_FALLING);
+        state = 1;
+    } else {
+        t_fall = capture; // 下降沿
+        // 计算 high_time
+        high_time = (t_fall >= t_rise) ? (t_fall - t_rise) : (t_fall + (htim->Init.Period + 1) - t_rise);
+        // 下一步捕获上升沿以测周期
+        __HAL_TIM_SET_CAPTUREPOLARITY(htim, TIM_CHANNEL_1, TIM_INPUTCHANNELPOLARITY_RISING);
+        state = 0;
+        // 若需要再计算周期，可保存上一个上升时间并求差
+    }
+}
+```
+
+输出计算：频率 = timer_clock / (period_counts); 占空比 = high_time / period.
+
+---
+
+#### 5.10.4 实验4：超声波测距（HC-SR04 类）
+
+目的：使用定时器输出一个 10us 的触发脉冲并用输入捕获测量回波脉宽，从而计算距离。
+
+流程：
+1) 将 TRIG 引脚产生 10us 高脉冲（可通过 GPIO + delay_us 或使用输出比较短脉冲）；
+2) 触发后开启输入捕获，测量 ECHO 引脚高电平持续时间；
+3) 距离 = (echo_time_us) * (声速约 343 m/s) / 2。
+
+示例代码（伪代码）：
+
+```c
+void hc_sr04_trigger(void) {
+    HAL_GPIO_WritePin(TRIG_PORT, TRIG_PIN, GPIO_PIN_SET);
+    delay_us(10);
+    HAL_GPIO_WritePin(TRIG_PORT, TRIG_PIN, GPIO_PIN_RESET);
+    // 启动输入捕获以测量 ECHO
+}
+
+// 捕获回调中计算时间
+void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim) {
+    static uint32_t t_start = 0;
+    uint32_t cap = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_1);
+    if (HAL_GPIO_ReadPin(ECHO_PORT, ECHO_PIN) == GPIO_PIN_SET) {
+        t_start = cap;
+    } else {
+        uint32_t t_end = cap;
+        uint32_t delta = (t_end >= t_start) ? (t_end - t_start) : (t_end + (htim->Init.Period + 1) - t_start);
+        uint32_t time_us = delta; // 依计数器刻度为 1us
+        float distance_m = (time_us * 1e-6f) * 343.0f / 2.0f;
+    }
+}
+```
+
+注意：回波时间可能达到数十 ms，需选择合适的计数器位宽与预分频以避免溢出；处理异常回波与超时。
+
+---
+
+#### 5.10.5 实验5：定时器主/从（从模式控制器）——同步触发与级联
+
+目的：学习使用定时器主/从模式（Master/Slave）实现多通道同步、采样对齐或扩展计数位宽。
+
+要点：
+- 主定时器产生触发输出（TRGO），从定时器配置为触发输入（Trigger Input）并在触发时重载或启动；
+- 可用于：多路 PWM 同步、ADC 多通道同步采样、级联定时器扩展计数深度（例如将两个 16 位定时器组合成 32 位计数）。
+
+示意图：
+
+```bob
+  +-----------------+  "TRGO"  +------------------+
+  | "TIM1 主定时器" |────────→| "TIM2 从定时器"  |
+  +---------+-------+          +------------------+
+            |
+            | "TRGO"
+            v
+  +------------------+
+  | "ADC 触发采样"   |
+  +------------------+
+```
+
+简要配置思路（伪代码）：
+
+```c
+// 主：配置 TRGO 为更新事件
+hdtim_master.Init...;
+HAL_TIM_Base_Init(&hdtim_master);
+// 从：配置触发输入为 ITRx（对应主定时器）并选择 SlaveMode
+hdtim_slave.Init...;
+__HAL_TIM_SET_TRIGGER_SOURCE(&hdtim_slave, TIM_TS_ITR0);
+__HAL_TIM_SET_SLAVE_MODE(&hdtim_slave, TIM_SLAVEMODE_TRIGGER);
+```
+
+应用示例：使用 TIM1 作为主时钟生成 1kHz 触发，TIM2 在触发时采样或累加计数。
+
+---
+
+#### 5.10.6 实验6：占空比测量的进阶：双通道捕获法
+
+目的：在复杂信号或高频场合提升测量可靠性，使用两个通道分别捕获上升与下降沿或用两路滤波独立采样。
+
+实现提示：
+- 将信号接到 TIM 的 CH1(上升) 和 CH2(下降)；在同一周期捕获两个通道值直接计算高/低时间，减小切换配置带来的延迟。示例代码与输入捕获类似。
+
+---
+
+#### 5.10.7 实验7：编码器实验（增量编码器实战）
+
+目的：使用定时器编码器模式读取增量编码器位移与速度，并结合滤波/微分计算速度。
+
+步骤要点：
+1) 将编码器 A/B 相连接到 TIM 的两个通道，启用编码器接口模式；
+2) 定期读取计数器（CNT）并处理溢出以获得累积计数；
+3) 通过差分计数除以采样周期计算速度；
+4) 对低速范围使用降速滤波或累积法提高分辨率。
+
+代码片段（读取累积计数）：
+
+```c
+uint32_t last_cnt = 0;
+int32_t total = 0;
+void encoder_task(void *arg) {
+    for (;;) {
+        uint32_t cnt = __HAL_TIM_GET_COUNTER(&htim_enc);
+        int32_t diff = (int32_t)(cnt - last_cnt);
+        // 处理计数器向下/向上溢出
+        if (diff > 32767) diff -= 65536;
+        if (diff < -32768) diff += 65536;
+        total += diff;
+        last_cnt = cnt;
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
+}
+```
+
+实验扩展：实现速度闭环（将编码器读数作为反馈）与滤波、分辨率提升技术（插值、高速采样）。
+
+---
+
+以上实验可单独作为课堂练习或组合成综合项目（例如：用编码器与占空比测量实现闭环速度控制，并用超声波测距作为避障信号）。
+
+
+### 5.11 参考资料
+- ST 官方参考手册（RM 系列）
+- STM32 HAL/LL 库 API 文档
+- 《STM32 嵌入式系统开发实战》 相关章节
+
+---
+
+### 5.12 本章测验
+
+<div id="exam-meta" data-exam-id="chapter7" data-exam-title="第七章 STM32定时器应用测验" style="display:none"></div>
 
 <!-- mkdocs-quiz intro -->
 
 <quiz>
-1) 在分层架构模式中，HAL（硬件抽象层）的核心作用是：
-- [ ] 直接实现业务逻辑，减少代码量
-- [ ] 替代操作系统的任务调度功能
-- [x] 屏蔽芯片硬件差异，使上层代码在移植时无需修改
-- [ ] 提高程序运行速度，减少函数调用开销
+1) STM32 定时器的计数器时钟频率计算公式是：
+- [ ] 定时器时钟 × (Prescaler + 1)
+- [x] 定时器时钟 / (Prescaler + 1)
+- [ ] 定时器时钟 / Prescaler
+- [ ] 定时器时钟 × Prescaler
 
-正确。HAL 层定义统一接口并由平台相关代码实现，上层只调用接口，换芯片时仅替换 HAL 实现即可。
+正确。预分频器将定时器时钟除以 (Prescaler + 1)，得到实际的计数时钟频率。
 </quiz>
 
 <quiz>
-1) Renode 在系统级仿真中相比 QEMU 的显著优势是下列哪项？
-- [ ] 更快的 CPU 仿真性能（指每秒指令数）
-- [x] 更灵活的外设模型与脚本化注入能力
-- [ ] 更低的内存占用
-- [ ] 原生支持所有操作系统内核的仿真
+2) 在中心对齐计数模式（Center-aligned）下，定时器主要用于什么场景？
+- [ ] 精确延时
+- [x] 生成对称 PWM 波形或定时同步
+- [ ] 输入捕获测量脉宽
+- [ ] 编码器接口
 
-正确。Renode 的核心优势之一是其可脚本化的外设模型和强大的注入/分析能力，便于进行故障注入与系统级测试；QEMU 更侧重于 CPU 仿真性能和通用系统仿真。
+正确。中心对齐模式常用于生成对称 PWM，特别适合电机控制等需要对称波形的应用。
 </quiz>
 
 <quiz>
-2) 在使用 Renode 进行高保真实时性验证时，应关注哪些关键建模要素？
-- [x] 时钟域与定时器 tick 精度
-- [x] 外设到中断线的硬件延迟与 ISR 执行时间
-- [ ] 文件系统的挂载选项（与实时性无直接关系）
-- [x] 总线带宽与 DMA 争用
+3) PWM 占空比由以下哪两个寄存器的比值决定？
+- [ ] Prescaler (PSC) 与 Auto-reload (ARR)
+- [x] Capture/Compare (CCR) 与 Auto-reload (ARR)
+- [ ] Counter (CNT) 与 Prescaler (PSC)
+- [ ] Counter (CNT) 与 Capture/Compare (CCR)
 
-正确。实时性验证依赖于精确的时钟域、外设到中断的延迟和系统总线争用等因素；文件系统挂载选项通常不直接影响嵌入式系统的硬实时性质（除非涉及 I/O 调度）。
+正确。PWM 占空比 = CCR / (ARR + 1)，其中 ARR 决定周期，CCR 决定高电平时间。
 </quiz>
 
 <quiz>
-3) 说明如何在 Renode 中保证一次故障注入实验的可重复性？
-- [x] 固定随机种子，确保随机性可重现
-- [x] 使用检查点(snapshot)在注入前保存系统状态，失败后回退重试
-- [x] 在测试记录中保存 Renode 版本、平台描述文件与固件 ELF 的版本信息
-- [ ] 使用不同的仿真器每次重复实验
+4) 输入捕获（Input Capture）功能主要用于：
+- [ ] 生成 PWM 波形
+- [x] 测量外部信号的频率、占空比或脉宽
+- [ ] 控制电机转速
+- [ ] 产生精确延时
 
-正确。通过固定随机种子可以保证生成的随机事件序列一致；检查点允许在相同初态下重复注入；记录工具与固件版本可确保环境一致，从而达到可重复性要求。
+正确。输入捕获可以捕获外部信号的边沿变化，记录时间戳，从而计算频率和占空比。
 </quiz>
 
 <quiz>
-4) 基于本章工程实例，假设在一次 I2C 超时注入测试中，固件未按预期在重试耗尽后发送错误日志，以下哪些是可能的原因？
-- [x] 固件逻辑缺陷
-- [x] 仿真外设注入未成功
-- [x] UART 映射/输出未连接
-- [ ] Renode 版本过低
+5) STM32 编码器接口模式（Encoder Mode）的主要优势是：
+- [ ] 可以直接驱动电机
+- [x] 硬件直接处理两相正交编码器信号，高效读取旋转角度和速度
+- [ ] 自动生成 PWM 控制信号
+- [ ] 无需外部编码器
 
-正确。可能原因包括：固件逻辑缺陷（可用 GDB 调试）、仿真外设注入未成功（可用 analyzer/trace 查看）、UART 映射/输出未连接（检查 connector 配置）。
+正确。编码器接口模式硬件解码 A/B 相信号，减轻 CPU 负担，提高计数精度。
+</quiz>
+
+<quiz>
+6) 定时器更新中断（Update Interrupt）在什么情况下触发？
+- [ ] 捕获到外部信号边沿时
+- [x] 计数器达到 ARR（自动重装载值）溢出或手动更新时
+- [ ] DMA 传输完成时
+- [ ] 编码器信号变化时
+
+正确。更新中断在定时器计数周期结束（溢出）时触发，常用于周期性任务。
+</quiz>
+
+<quiz>
+7) 在使用定时器进行输入捕获时，如果两次捕获之间计数器溢出，应该如何处理？
+- [ ] 忽略溢出，直接计算差值
+- [x] 考虑溢出情况，使用 (now + (ARR + 1) - last) 计算差值
+- [ ] 停止定时器，重新开始
+- [ ] 只记录最后一次捕获值
+
+正确。需要处理计数器溢出，确保正确计算时间间隔。
+</quiz>
+
+<quiz>
+8) 定时器主从模式（Master/Slave）主要用于：
+- [ ] 扩展定时器计数位宽
+- [x] 多定时器同步触发，例如同步 PWM 或采样同步
+- [ ] 提高定时器计数频率
+- [ ] 降低功耗
+
+正确。主从模式可以让多个定时器同步工作，实现精确的时间同步。
+</quiz>
+
+<quiz>
+9) 死区时间（Dead-time）在什么情况下特别重要？
+- [ ] 输入捕获测量
+- [x] 半桥/全桥驱动，防止上下桥同时导通造成短路
+- [ ] 编码器接口
+- [ ] 软件 PWM 实现
+
+正确。死区时间确保在开关切换时上下桥臂不会同时导通，避免电源短路。
+</quiz>
+
+<quiz>
+10) 以下哪种方法最适合实现高精度、低 CPU 占用的 PWM 输出？
+- [ ] 软件循环延时翻转 GPIO
+- [x] 硬件定时器 PWM 模式
+- [ ] 外部专用 PWM 芯片
+- [ ] SPI 通信控制
+
+正确。硬件定时器 PWM 模式由硬件自动生成波形，精度高且不占用 CPU。
 </quiz>
 
 <!-- mkdocs-quiz results -->
@@ -470,12 +487,4 @@ r.stop()
 
 ---
 
-
-章节练习题答案与解析均已给出，便于教师批阅或学生自测。建议在课堂实践环节让学生基于提供的 RESC 与 Python 脚本完成实验，并要求提交测试报告（包含仿真日志、检查点、失败重现步骤与改进建议）。
-
----
-
-参考延伸（便于后续扩展）
-- 建议后续章节或附录加入：Renode 自定义外设模型开发实战（包含示例 C# 模型代码）、如何用 Renode 复现复杂总线拓扑（多主、多DMA）、在 Renode 中集成能耗模型与热模型的研究范例。
-
-本章生成遵循“图形优先、表格次之、文字补充”原则；代码示例聚焦核心功能模块（定时采样 / I2C 读取 / UART 发送 / 注入与断言），并保留扩展点以便在后续课堂上结合真实平台进行实操验证。若需要，本章可进一步拆分为讲授用 PPT 幻灯片、实验指导书与 CI 示例仓库（含可执行 RESC/Python Test Runner），可继续扩展。
+（本章为概览性草稿，建议结合目标 MCU 数据手册与 HAL/LL 示例移植并补充具体芯片型号的寄存器细节与代码示例。）

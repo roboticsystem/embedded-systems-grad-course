@@ -2,980 +2,643 @@
 number headings: first-level 2, start-at 12
 ---
 
-## 12 第12章 机器人系统开发环境配置
+## 12 第12章 机器人感知与视觉基础
 
-### 12.1 本章知识导图
+### 12.1 机器人感知概述
 
-```plantuml
-@startmindmap
-skinparam mindmapNodeBackgroundColor<<root>>    #1565C0
-skinparam mindmapNodeFontColor<<root>>          white
-skinparam mindmapNodeBackgroundColor<<l1>>      #1976D2
-skinparam mindmapNodeFontColor<<l1>>            white
-skinparam mindmapNodeBackgroundColor<<l1r>>     #0277BD
-skinparam mindmapNodeFontColor<<l1r>>           white
-skinparam ArrowColor                            #90CAF9
-skinparam mindmapNodeBorderColor                #90CAF9
+感知是机器人理解外部世界的核心能力。不同类型的传感器提供不同维度的环境信息：
 
-* 第12章\n嵌入式开发环境配置
+```bob
+                          "机器人感知传感器谱系"
 
-** CubeIDE与Cube系列
-*** STM32CubeIDE
-**** 集成开发环境特点
-**** 调试与仿真功能
-*** STM32CubeMX
-**** 图形化配置工具
-**** 时钟树配置
-**** 外设初始化代码生成
-*** GitHub Copilot插件
-**** AI代码补全
-**** 代码解释与重构
-
-** VSCode开发环境
-*** VSCode基础配置
-**** 插件安装与管理
-**** 工作区设置
-*** GitHub Copilot
-**** 智能代码生成
-**** 上下文理解
-*** CLI工具链
-**** 交叉编译工具
-**** GDB调试器
-*** CubeMX插件
-**** 图形化配置集成
-*** 容器化编译环境
-**** Docker配置
-**** 环境隔离
-**** 可移植性
-
-** Git版本控制
-*** Git基础
-**** 仓库初始化
-**** 提交与分支
-*** 嵌入式开发最佳实践
-**** .gitignore配置
-**** 大文件管理
-*** 协作开发
-**** 分支策略
-**** 代码审查
-*** CI/CD集成
-**** 自动构建
-**** 自动化测试
-
-** 工程实践
-*** 环境快速搭建
-*** 多环境协同开发
-*** 项目模板复用
-@endmindmap
+  "测距类"                   "视觉类"                  "惯性/接触类"
++-------------+          +-------------+          +-------------+
+| "超声波"     |          |"单目相机"    |          | "IMU"        |
+| "红外"       |          |"双目相机"    |          | "力/力矩"    |
+| "激光雷达"   |          |"深度相机"    |          | "触觉传感器" |
+| "(LiDAR)"   |          |"事件相机"    |          | "编码器"     |
++------+------+          +------+------+          +------+------+
+       |                        |                        |
+       v                        v                        v
+  "距离/点云"              "图像/深度图"             "加速度/角速度"
 ```
 
-### 12.2 章节导入
+本章聚焦**视觉感知**——相机是机器人获取丰富语义信息的核心传感器，也是 Visual SLAM（第13章）的基础。
 
-嵌入式开发环境是进行嵌入式系统开发的基础和前提。一个高效、稳定、易用的开发环境能够显著提升开发效率，降低开发成本，缩短产品上市周期。本章将系统介绍三种主流的嵌入式开发环境配置方案，包括ST官方的CubeIDE生态系统、VSCode轻量级开发环境以及Git版本控制系统在嵌入式开发中的应用。
+#### 12.1.1 机器人常用视觉传感器
 
-通过本章学习，学生将掌握：
-- STM32CubeIDE与CubeMX的配置与使用方法
-- GitHub Copilot在嵌入式开发中的AI辅助编程技巧
-- VSCode作为嵌入式开发环境的完整配置方案
-- 基于Docker的容器化嵌入式编译环境构建
-- Git在嵌入式开发中的版本控制最佳实践
+| 传感器类型 | 输出 | 典型产品 | 优缺点 |
+|-----------|------|---------|--------|
+| **单目相机** | RGB 图像 | USB摄像头、CSI相机 | 成本低，无深度信息 |
+| **双目相机** | RGB + 视差图 | Intel RealSense D435、ZED 2 | 可计算深度，计算量大 |
+| **RGB-D 相机** | RGB + 深度图 | RealSense D455、Kinect | 直接获取深度，室外受限 |
+| **事件相机** | 异步事件流 | DVS346、DAVIS | 超高动态范围，数据稀疏 |
 
----
+### 12.2 相机模型与标定
 
-### 12.3 CubeIDE与Cube系列开发环境
+#### 12.2.1 针孔相机模型
 
-#### 12.3.1 STM32CubeIDE概述
+相机将三维世界中的点投影到二维图像平面。最基本的模型是**针孔模型**（Pinhole Model）：
 
-STM32CubeIDE是STMicroelectronics推出的一款集成开发环境（IDE），基于Eclipse框架，专为STM32微控制器和微处理器设计。它将代码编辑、编译、调试、仿真等功能集成于一体，为开发者提供一站式开发体验。
-
-##### 12.3.1.1 STM32CubeIDE核心特性
-
-| 特性类别 | 功能描述 | 优势 |
-|---------|---------|------|
-| 编辑器 | 语法高亮、代码补全、自动格式化 | 提升代码编写效率 |
-| 编译器 | 集成GCC ARM工具链 | 无需额外配置编译环境 |
-| 调试器 | 集成GDB调试器，支持SWD/JTAG接口 | 硬件级调试能力 |
-| 仿真器 | 支持STM32仿真模型 | 硬件无关的功能验证 |
-| CubeMX集成 | 内置图形化配置工具 | 无缝衔接硬件配置与代码开发 |
-
-##### 12.3.1.2 安装与配置流程
-
-STM32CubeIDE的安装流程如下：
-
-```plantuml
-@startuml
-start
-:下载STM32CubeIDE安装包;
-:运行安装程序;
-:选择安装路径;
-:选择组件（包含CubeMX、GCC工具链等）;
-:完成安装;
-:首次启动配置工作区;
-:安装设备支持包（Device Pack）;
-:配置调试器（ST-Link/J-Link）;
-stop
-@enduml
+```bob
+  "世界坐标系"                           "图像平面"
+                    
+       Z                                  v ^
+       ^   P(X,Y,Z)                         |    . p(u,v)
+       |  .                                 |   /
+       | /                                  |  /
+       |/        "焦距 f"                    | /
+  O ---+----------[====]------------------○ +--------→ u
+       |          "光心"                   "o(cx,cy)"      
+       |                                   
+       +--------→ X                        
+      /
+     v Y
 ```
 
-#### 12.3.2 STM32CubeMX图形化配置
-
-STM32CubeMX是STM32CubeIDE的核心组件之一，提供图形化的芯片配置界面，通过可视化操作完成引脚分配、时钟配置、外设初始化等工作，并自动生成初始化代码。
-
-##### 12.3.2.1 核心功能模块
-
-1. **引脚配置（Pinout & Configuration）**
-   - 可视化引脚分配
-   - 自动检测引脚冲突
-   - 外设功能映射
-
-2. **时钟配置（Clock Configuration）**
-   - 图形化时钟树
-   - 自动PLL计算
-   - 时钟源选择与配置
-
-3. **项目管理（Project Manager）**
-   - 生成IDE项目文件
-   - 代码生成选项配置
-   - 堆栈大小设置
-
-##### 12.3.2.2 时钟配置示例
-
-以下是STM32F407时钟配置的关键代码片段：
-
-```c
-void SystemClock_Config(void)
-{
-  RCC_OscInitTypeDef RCC_OscInitStruct = {0};
-  RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
-
-  // 配置主内部调压器输出电压
-  __HAL_RCC_PWR_CLK_ENABLE();
-  __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE1);
-
-  // 初始化HSE、PLL等振荡器
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
-  RCC_OscInitStruct.HSEState = RCC_HSE_ON;
-  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
-  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
-  RCC_OscInitStruct.PLL.PLLM = 8;
-  RCC_OscInitStruct.PLL.PLLN = 336;
-  RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV2;
-  RCC_OscInitStruct.PLL.PLLQ = 7;
-  if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
-  {
-    Error_Handler();
-  }
-
-  // 初始化系统时钟、AHB、APB总线时钟
-  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
-                              |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
-  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
-  RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
-  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV4;
-  RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV2;
-
-  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_5) != HAL_OK)
-  {
-    Error_Handler();
-  }
-}
-```
-
-#### 12.3.3 GitHub Copilot插件配置
-
-GitHub Copilot是由OpenAI和GitHub联合开发的AI编程助手，通过机器学习模型理解代码上下文，提供智能代码补全、代码生成、代码解释等功能，显著提升嵌入式开发效率。
-
-##### 12.3.3.1 安装步骤
-
-1. 在STM32CubeIDE中安装Eclipse Marketplace插件
-2. 搜索并安装GitHub Copilot插件
-3. 重启IDE并使用GitHub账号登录
-4. 激活Copilot服务
-
-##### 12.3.3.2 嵌入式开发中的应用场景
-
-| 应用场景 | Copilot功能 | 实际效果 |
-|---------|------------|---------|
-| 外设驱动编写 | 根据注释生成驱动代码 | 减少80%的重复代码编写 |
-| 寄存器配置 | 提供寄存器位操作建议 | 降低硬件配置错误率 |
-| 中断处理 | 生成中断服务程序框架 | 快速构建中断处理逻辑 |
-| 通信协议实现 | 提供协议栈代码模板 | 加速UART/SPI/I2C等开发 |
-| 代码重构 | 建议代码优化方案 | 提升代码质量和可维护性 |
-
-##### 12.3.3.3 代码生成示例
-
-```c
-/**
- * @brief 初始化USART1串口通信
- * @param baudrate 波特率
- * @retval None
- */
-void MX_USART1_UART_Init(uint32_t baudrate)
-{
-  huart1.Instance = USART1;
-  huart1.Init.BaudRate = baudrate;
-  huart1.Init.WordLength = UART_WORDLENGTH_8B;
-  huart1.Init.StopBits = UART_STOPBITS_1;
-  huart1.Init.Parity = UART_PARITY_NONE;
-  huart1.Init.Mode = UART_MODE_TX_RX;
-  huart1.Init.HwFlowCtl = UART_HWCONTROL_NONE;
-  huart1.Init.OverSampling = UART_OVERSAMPLING_16;
-  if (HAL_UART_Init(&huart1) != HAL_OK)
-  {
-    Error_Handler();
-  }
-}
-
-// Copilot根据函数名和上下文生成的发送函数
-/**
- * @brief 通过USART1发送数据
- * @param data 数据指针
- * @param len 数据长度
- * @retval HAL状态
- */
-HAL_StatusTypeDef USART1_SendData(uint8_t *data, uint16_t len)
-{
-  return HAL_UART_Transmit(&huart1, data, len, HAL_MAX_DELAY);
-}
-```
-
----
-
-### 12.4 VSCode开发环境配置
-
-VSCode凭借其轻量、灵活、插件丰富的特点，正在成为嵌入式开发的热门选择。本节将介绍如何将VSCode打造为功能完备的嵌入式开发环境。
-
-#### 12.4.1 VSCode基础配置
-
-##### 12.4.1.1 核心插件列表
-
-| 插件名称 | 功能描述 | 必要性 |
-|---------|---------|-------|
-| C/C++ Extension Pack | C/C++语言支持、智能提示、调试 | 必需 |
-| Cortex-Debug | ARM Cortex-M调试支持 | 必需 |
-| ARM | ARM汇编语法高亮 | 推荐 |
-| DeviceTree | 设备树语法支持（Linux嵌入式） | 可选 |
-| PlatformIO IDE | 跨平台嵌入式开发框架 | 推荐 |
-
-##### 12.4.1.2 工作区配置示例
-
-`.vscode/c_cpp_properties.json` 配置：
-
-```json
-{
-  "configurations": [
-    {
-      "name": "STM32",
-      "includePath": [
-        "${workspaceFolder}/**",
-        "${workspaceFolder}/Drivers/STM32F4xx_HAL_Driver/Inc",
-        "${workspaceFolder}/Drivers/CMSIS/Device/ST/STM32F4xx/Include",
-        "${workspaceFolder}/Drivers/CMSIS/Include"
-      ],
-      "defines": [
-        "STM32F407xx",
-        "USE_HAL_DRIVER"
-      ],
-      "compilerPath": "/usr/bin/arm-none-eabi-gcc",
-      "cStandard": "c11",
-      "cppStandard": "c++17",
-      "intelliSenseMode": "clang-arm"
-    }
-  ],
-  "version": 4
-}
-```
-
-#### 12.4.2 GitHub Copilot与VSCode集成
-
-VSCode是GitHub Copilot的原生支持环境，两者的结合能够发挥最大的AI辅助编程效果。
-
-##### 12.4.2.1 Copilot Chat功能
-
-Copilot Chat提供对话式编程助手，支持以下嵌入式开发场景：
-
-- **代码解释**：解释复杂的寄存器配置代码
-- **Bug修复**：分析代码问题并提供修复建议
-- **性能优化**：提供嵌入式代码优化方案
-- **文档生成**：自动生成函数注释和代码文档
-
-##### 12.4.2.2 交互示例
-
-```
-用户：解释这段ADC初始化代码的工作原理
-
-Copilot：这段代码配置了STM32的ADC1外设，主要步骤包括：
-1. 启用ADC1时钟
-2. 配置ADC分辨率为12位
-3. 设置采样时间为15个周期
-4. 配置单通道连续转换模式
-5. 启用ADC并校准
-
-具体每个寄存器的作用是...
-
-用户：如何优化这段UART发送函数以减少CPU占用？
-
-Copilot：可以采用以下优化方案：
-1. 使用DMA传输替代阻塞发送
-2. 启用UART发送中断
-3. 实现环形缓冲区管理
-
-优化后的代码示例：
-...
-```
-
-#### 12.4.3 CLI工具链配置
-
-命令行工具链是VSCode嵌入式开发环境的核心，提供编译、链接、调试等功能。
-
-##### 12.4.3.1 交叉编译工具链安装
-
-```bash
-# Ubuntu/Debian系统安装ARM GCC工具链
-sudo apt-get update
-sudo apt-get install gcc-arm-none-eabi gdb-arm-none-eabi
-
-# 验证安装
-arm-none-eabi-gcc --version
-arm-none-eabi-gdb --version
-```
-
-##### 12.4.3.2 Makefile构建系统
-
-```makefile
-# 项目名称
-TARGET = stm32f407_project
-
-# 源文件
-SRCS = \
-Src/main.c \
-Src/stm32f4xx_it.c \
-Src/stm32f4xx_hal_msp.c \
-Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal.c \
-Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_gpio.c \
-Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_uart.c
-
-# 头文件路径
-INCLUDES = \
--IInc \
--IDrivers/STM32F4xx_HAL_Driver/Inc \
--IDrivers/CMSIS/Device/ST/STM32F4xx/Include \
--IDrivers/CMSIS/Include
-
-# 编译器选项
-CC = arm-none-eabi-gcc
-CFLAGS = -mcpu=cortex-m4 -mthumb -mfpu=fpv4-sp-d16 -mfloat-abi=hard
-CFLAGS += -O0 -g3 -Wall -fdata-sections -ffunction-sections
-CFLAGS += $(INCLUDES) -DSTM32F407xx -DUSE_HAL_DRIVER
-
-# 链接器选项
-LDFLAGS = -mcpu=cortex-m4 -mthumb -mfpu=fpv4-sp-d16 -mfloat-abi=hard
-LDFLAGS += -specs=nano.specs -TSTM32F407VGTX_FLASH.ld
-LDFLAGS += -Wl,--gc-sections
-
-# 构建目标
-all: $(TARGET).elf $(TARGET).hex $(TARGET).bin
-
-$(TARGET).elf: $(SRCS)
-	$(CC) $(CFLAGS) $(SRCS) $(LDFLAGS) -o $@
-
-$(TARGET).hex: $(TARGET).elf
-	arm-none-eabi-objcopy -O ihex $< $@
-
-$(TARGET).bin: $(TARGET).elf
-	arm-none-eabi-objcopy -O binary $< $@
-
-clean:
-	rm -f $(TARGET).elf $(TARGET).hex $(TARGET).bin
-
-.PHONY: all clean
-```
-
-#### 12.4.4 容器化编译环境
-
-Docker容器技术能够提供一致、可重复、可移植的嵌入式开发环境，解决"在我机器上能编译"的问题。
-
-##### 12.4.4.1 Dockerfile配置
-
-```dockerfile
-# 基础镜像
-FROM ubuntu:22.04
-
-# 设置非交互式安装
-ENV DEBIAN_FRONTEND=noninteractive
-
-# 安装基础工具
-RUN apt-get update && apt-get install -y \
-    build-essential \
-    git \
-    wget \
-    curl \
-    vim \
-    make \
-    cmake \
-    python3 \
-    python3-pip \
-    && rm -rf /var/lib/apt/lists/*
-
-# 安装ARM GCC工具链
-RUN apt-get update && apt-get install -y \
-    gcc-arm-none-eabi \
-    gdb-arm-none-eabi \
-    && rm -rf /var/lib/apt/lists/*
-
-# 安装OpenOCD
-RUN apt-get update && apt-get install -y \
-    openocd \
-    && rm -rf /var/lib/apt/lists/*
-
-# 设置工作目录
-WORKDIR /workspace
-
-# 设置环境变量
-ENV PATH="/opt/gcc-arm-none-eabi/bin:${PATH}"
-
-# 默认命令
-CMD ["/bin/bash"]
-```
-
-##### 12.4.4.2 Docker Compose配置
-
-```yaml
-version: '3.8'
-
-services:
-  embedded-dev:
-    build: .
-    container_name: stm32-dev
-    volumes:
-      - ./:/workspace
-    devices:
-      - /dev/bus/usb:/dev/bus/usb
-    working_dir: /workspace
-    command: tail -f /dev/null
-```
-
-##### 12.4.4.3 使用容器进行编译
-
-```bash
-# 构建并启动容器
-docker-compose up -d
-
-# 进入容器进行编译
-docker exec -it stm32-dev bash
-cd /workspace
-make clean && make -j4
-
-# 或者直接在容器外执行编译命令
-docker exec stm32-dev make -C /workspace clean all
-```
-
----
-
-### 12.5 Git在嵌入式开发中的使用
-
-Git作为分布式版本控制系统，在嵌入式开发中扮演着至关重要的角色。本节将介绍Git在嵌入式开发中的最佳实践。
-
-#### 12.5.1 Git基础配置
-
-##### 12.5.1.1 初始化仓库
-
-```bash
-# 创建新项目
-mkdir stm32-project && cd stm32-project
-git init
-
-# 配置用户信息
-git config user.name "Your Name"
-git config user.email "your.email@example.com"
-
-# 克隆现有项目
-git clone https://github.com/username/embedded-project.git
-```
-
-##### 12.5.1.2 .gitignore配置
-
-嵌入式项目的.gitignore文件需要特别注意以下内容：
-
-```gitignore
-# 编译生成的文件
-*.o
-*.elf
-*.hex
-*.bin
-*.a
-*.lib
-*.exe
-*.out
-*.map
-
-# IDE项目文件（如果使用不同IDE协作）
-.idea/
-.vscode/
-*.ioc
-*.eww
-*.ewp
-*.ewd
-.cproject
-.project
-.settings/
-
-# 调试文件
-*.log
-*.d
-*.su
-
-# 操作系统文件
-.DS_Store
-Thumbs.db
-
-# CubeMX生成文件（可选，视团队协作策略而定）
-# Src/stm32f4xx_hal_msp.c
-# Inc/stm32f4xx_hal_conf.h
-
-# 大文件（考虑使用Git LFS）
-*.pdf
-*.zip
-*.tar.gz
-```
-
-#### 12.5.2 嵌入式开发Git工作流
-
-##### 12.5.2.1 Git Flow分支策略
-
-```plantuml
-@startuml
-skinparam backgroundColor #FEFEFE
-skinparam handwritten false
-
-(*) -up-> "main\n(生产环境)"
--up-> "develop\n(开发集成)"
-:feature/new-sensor-driver;
-:feature/ble-communication;
-:release/v1.0.0;
-:hotfix/critical-bug-fix;
-
-"main\n(生产环境)" -right-> "release/v1.0.0"
-"release/v1.0.0" -down-> "develop\n(开发集成)"
-"develop\n(开发集成)" -left-> "feature/new-sensor-driver"
-"develop\n(开发集成)" -left-> "feature/ble-communication"
-"main\n(生产环境)" -down-> "hotfix/critical-bug-fix"
-"hotfix/critical-bug-fix" -right-> "develop\n(开发集成)"
-
-@enduml
-```
-
-##### 12.5.2.2 分支管理最佳实践
-
-| 分支类型 | 命名规范 | 用途 | 生命周期 |
-|---------|---------|------|---------|
-| main | main | 稳定发布版本 | 永久 |
-| develop | develop | 开发集成分支 | 永久 |
-| feature | feature/* | 新功能开发 | 短期 |
-| release | release/* | 发布准备 | 短期 |
-| hotfix | hotfix/* | 紧急修复 | 短期 |
-
-#### 12.5.3 大文件管理与Git LFS
-
-嵌入式项目经常包含二进制文件、固件镜像、PDF文档等大文件，Git LFS（Large File Storage）是最佳解决方案。
-
-##### 12.5.3.1 Git LFS配置
-
-```bash
-# 安装Git LFS
-sudo apt-get install git-lfs
-
-# 初始化Git LFS
-git lfs install
-
-# 跟踪大文件类型
-git lfs track "*.pdf"
-git lfs track "*.bin"
-git lfs track "*.hex"
-git lfs track "*.zip"
-
-# 查看跟踪的文件类型
-git lfs track
-
-# 提交.gitattributes文件
-git add .gitattributes
-git commit -m "Configure Git LFS for large files"
-```
-
-#### 12.5.4 CI/CD集成
-
-持续集成与持续部署（CI/CD）能够自动化嵌入式项目的构建、测试和部署流程。
-
-##### 12.5.4.1 GitHub Actions示例
-
-```yaml
-name: STM32 Build CI
-
-on:
-  push:
-    branches: [ main, develop ]
-  pull_request:
-    branches: [ main ]
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
+投影方程（齐次坐标）：
+
+$$s \begin{bmatrix} u \\ v \\ 1 \end{bmatrix} = \mathbf{K} [\mathbf{R} | \mathbf{t}] \begin{bmatrix} X \\ Y \\ Z \\ 1 \end{bmatrix}$$
+
+其中相机内参矩阵：
+
+$$\mathbf{K} = \begin{bmatrix} f_x & 0 & c_x \\ 0 & f_y & c_y \\ 0 & 0 & 1 \end{bmatrix}$$
+
+- $f_x, f_y$：焦距（像素单位）
+- $(c_x, c_y)$：光心在图像中的坐标
+
+#### 12.2.2 畸变模型
+
+实际镜头存在径向和切向畸变：
+
+**径向畸变**（桶形/枕形）：
+
+$$x_{distorted} = x(1 + k_1 r^2 + k_2 r^4 + k_3 r^6)$$
+$$y_{distorted} = y(1 + k_1 r^2 + k_2 r^4 + k_3 r^6)$$
+
+**切向畸变**（镜头与成像面不完全平行）：
+
+$$x_{distorted} = x + 2p_1 xy + p_2(r^2 + 2x^2)$$
+$$y_{distorted} = y + p_1(r^2 + 2y^2) + 2p_2 xy$$
+
+畸变系数向量：$\mathbf{d} = [k_1, k_2, p_1, p_2, k_3]$
+
+#### 12.2.3 相机标定
+
+使用棋盘格标定板，通过 OpenCV 的 `calibrateCamera` 函数求解内参和畸变系数：
+
+```python
+import cv2
+import numpy as np
+
+# 棋盘格参数
+BOARD_SIZE = (9, 6)     # 内角点数
+SQUARE_SIZE = 0.025     # 方格边长 25mm
+
+# 世界坐标系中的角点（z=0 平面）
+objp = np.zeros((BOARD_SIZE[0] * BOARD_SIZE[1], 3), np.float32)
+objp[:, :2] = np.mgrid[0:BOARD_SIZE[0], 0:BOARD_SIZE[1]].T.reshape(-1, 2) * SQUARE_SIZE
+
+obj_points = []  # 世界坐标
+img_points = []  # 图像坐标
+
+# 采集多张标定图像
+import glob
+images = glob.glob('calibration/*.jpg')
+
+for fname in images:
+    img = cv2.imread(fname)
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     
-    steps:
-    - uses: actions/checkout@v3
-    
-    - name: Install ARM GCC Toolchain
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y gcc-arm-none-eabi
-    
-    - name: Build Project
-      run: |
-        cd project
-        make clean
-        make -j4
-    
-    - name: Upload Build Artifacts
-      uses: actions/upload-artifact@v3
-      with:
-        name: firmware
-        path: |
-          project/build/*.elf
-          project/build/*.hex
-          project/build/*.bin
-```
-
----
-
-### 12.6 工程实践案例
-
-#### 12.6.1 案例背景
-
-本案例以工业传感器数据采集系统为应用场景，展示如何从零搭建完整的嵌入式开发环境，包括CubeIDE配置、VSCode环境设置、Git版本控制以及容器化构建。该系统需实现多传感器数据采集、实时数据处理、通信传输等功能，具有较高的工程实用价值。
-
-#### 12.6.2 系统架构
-
-```plantuml
-@startuml
-skinparam backgroundColor #FEFEFE
-
-package "开发环境层" {
-    [CubeIDE\n图形化配置] as cubeide
-    [VSCode\n代码编辑] as vscode
-    [GitHub Copilot\nAI辅助] as copilot
-    [Git\n版本控制] as git
-    [Docker\n容器构建] as docker
-}
-
-package "工具链层" {
-    [STM32CubeMX\n硬件配置] as cubemx
-    [ARM GCC\n编译工具] as gcc
-    [GDB\n调试器] as gdb
-    [OpenOCD\n下载器] as openocd
-}
-
-package "目标硬件层" {
-    [STM32F407\n主控芯片] as mcu
-    [传感器模块\n温度/湿度/压力] as sensors
-    [通信模块\nUART/CAN/Ethernet] as comm
-}
-
-cubeide --> cubemx
-vscode --> gcc
-vscode --> gdb
-copilot --> vscode
-git --> vscode
-docker --> gcc
-cubemx --> mcu
-gcc --> mcu
-gdb --> openocd
-openocd --> mcu
-mcu --> sensors
-mcu --> comm
-
-@enduml
-```
-
-#### 12.6.3 环境快速搭建脚本
-
-为了提高开发效率，编写自动化环境搭建脚本：
-
-```bash
-#!/bin/bash
-# setup_embedded_env.sh - 嵌入式开发环境快速搭建脚本
-
-set -e
-
-echo "========================================="
-echo "嵌入式开发环境搭建脚本"
-echo "========================================="
-
-# 更新系统包
-sudo apt-get update
-
-# 安装基础工具
-echo "安装基础开发工具..."
-sudo apt-get install -y \
-    build-essential \
-    git \
-    wget \
-    curl \
-    vim \
-    make \
-    cmake \
-    python3 \
-    python3-pip
-
-# 安装ARM GCC工具链
-echo "安装ARM GCC交叉编译工具链..."
-sudo apt-get install -y gcc-arm-none-eabi gdb-arm-none-eabi
-
-# 安装OpenOCD
-echo "安装OpenOCD调试器..."
-sudo apt-get install -y openocd
-
-# 安装Git LFS
-echo "安装Git LFS..."
-sudo apt-get install -y git-lfs
-git lfs install
-
-# 配置Git（可选项）
-read -p "是否配置Git用户信息? (y/n): " configure_git
-if [ "$configure_git" = "y" ]; then
-    read -p "请输入Git用户名: " git_name
-    read -p "请输入Git邮箱: " git_email
-    git config --global user.name "$git_name"
-    git config --global user.email "$git_email"
-    echo "Git配置完成"
-fi
-
-# 安装Docker（可选项）
-read -p "是否安装Docker容器环境? (y/n): " install_docker
-if [ "$install_docker" = "y" ]; then
-    curl -fsSL https://get.docker.com -o get-docker.sh
-    sudo sh get-docker.sh
-    sudo usermod -aG docker $USER
-    sudo systemctl enable docker
-    sudo systemctl start docker
-    echo "Docker安装完成，请重新登录以使用docker命令"
-fi
-
-echo "========================================="
-echo "环境搭建完成！"
-echo "========================================="
-arm-none-eabi-gcc --version
-```
-
-#### 12.6.4 核心代码示例
-
-```c
-/**
- * @file sensor_task.c
- * @brief 传感器数据采集任务
- */
-
-#include "sensor_task.h"
-#include "adc.h"
-#include "uart.h"
-#include <string.h>
-
-typedef struct {
-    float temperature;
-    float humidity;
-    float pressure;
-    uint32_t timestamp;
-} SensorData;
-
-static SensorData sensor_buffer[BUFFER_SIZE];
-static uint16_t buffer_index = 0;
-
-/**
- * @brief 初始化传感器接口
- * @retval None
- */
-void Sensor_Init(void)
-{
-    MX_ADC1_Init();
-    MX_USART2_UART_Init();
-    HAL_ADC_Start(&hadc1);
-}
-
-/**
- * @brief 读取传感器数据
- * @param data 传感器数据结构指针
- * @retval HAL状态
- */
-HAL_StatusTypeDef Sensor_ReadData(SensorData *data)
-{
-    uint32_t adc_value;
-    HAL_StatusTypeDef status;
-
-    status = HAL_ADC_PollForConversion(&hadc1, 100);
-    if (status != HAL_OK) {
-        return status;
-    }
-
-    adc_value = HAL_ADC_GetValue(&hadc1);
-    
-    data->temperature = ((float)adc_value / 4095.0f) * 100.0f;
-    data->humidity = 50.0f + ((float)adc_value / 4095.0f) * 30.0f;
-    data->pressure = 1013.25f + ((float)adc_value / 4095.0f) * 50.0f;
-    data->timestamp = HAL_GetTick();
-
-    return HAL_OK;
-}
-
-/**
- * @brief 传感器数据采集任务
- * @retval None
- */
-void Sensor_Task(void)
-{
-    SensorData data;
-    char uart_buffer[128];
-    
-    if (Sensor_ReadData(&data) == HAL_OK) {
-        sensor_buffer[buffer_index] = data;
-        buffer_index = (buffer_index + 1) % BUFFER_SIZE;
+    ret, corners = cv2.findChessboardCorners(gray, BOARD_SIZE, None)
+    if ret:
+        # 亚像素精化
+        criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
+        corners = cv2.cornerSubPix(gray, corners, (11, 11), (-1, -1), criteria)
         
-        snprintf(uart_buffer, sizeof(uart_buffer),
-                 "T:%.1f°C H:%.1f%% P:%.1fhPa\r\n",
-                 data.temperature, data.humidity, data.pressure);
-        
-        HAL_UART_Transmit(&huart2, (uint8_t*)uart_buffer, 
-                         strlen(uart_buffer), 100);
-    }
-}
+        obj_points.append(objp)
+        img_points.append(corners)
+
+# 标定
+ret, K, dist, rvecs, tvecs = cv2.calibrateCamera(
+    obj_points, img_points, gray.shape[::-1], None, None
+)
+
+print(f"内参矩阵 K:\n{K}")
+print(f"畸变系数: {dist}")
+print(f"重投影误差: {ret:.4f} 像素")
 ```
 
----
+### 12.3 图像特征检测与匹配
 
-### 12.7 本章测验
+视觉 SLAM 和视觉里程计的核心是从图像中提取**可重复检测、可唯一描述**的特征点。
 
-<div class="exam-meta">
-  <p><strong>章节测验</strong> | 满分: 100分 | 建议用时: 45分钟</p>
-</div>
+#### 12.3.1 特征点检测
 
-<div id="exam-meta" data-exam-id="chapter12" data-exam-title="第12章 机器人系统开发环境配置 测验" style="display:none"></div>
+```bob
+  "图像"          "检测关键点"        "计算描述子"        "匹配"
++--------+     +------------+     +------------+     +----------+
+|   .    |     | "角点/斑点" |     | "128/256维" |     | "暴力匹配"|
+|  . .   |---->| "位置提取"  |---->| "向量生成"  |---->| "或 KNN"  |
+|   .    |     |            |     |            |     |          |
++--------+     +------------+     +------------+     +----------+
+```
 
-<!-- mkdocs-quiz intro -->
+常用特征检测算法：
 
-<quiz>
-1) STM32CubeIDE基于以下哪个IDE框架开发？
-- [ ] Visual Studio
-- [x] Eclipse
-- [ ] IntelliJ IDEA
-- [ ] NetBeans
+| 算法 | 类型 | 描述子维度 | 特点 |
+|------|------|----------|------|
+| **Harris** | 角点 | 无 | 最经典的角点检测，旋转不变 |
+| **FAST** | 角点 | 无 | 极快，常配合 BRIEF/ORB 使用 |
+| **SIFT** | 斑点 | 128 float | 尺度+旋转不变，计算量大 |
+| **SURF** | 斑点 | 64 float | SIFT 的加速版 |
+| **ORB** | 角点 | 256 bit | FAST+BRIEF，开源免费，实时性好 |
 
-正确。STM32CubeIDE基于Eclipse框架开发，集成了STM32开发所需的各种工具链。
-</quiz>
+#### 12.3.2 ORB 特征
 
-<quiz>
-2) 在STM32CubeMX中，以下哪个功能用于配置系统时钟？
-- [ ] Pinout & Configuration
-- [x] Clock Configuration
-- [ ] Project Manager
-- [ ] Middleware
+ORB（Oriented FAST and Rotated BRIEF）是 ORB-SLAM 系列的核心特征，兼顾速度和鲁棒性：
 
-正确。Clock Configuration界面提供图形化时钟树配置，用于设置系统时钟、PLL、总线分频等参数。
-</quiz>
+1. **检测**：使用 FAST 角点检测，在图像金字塔（多尺度）上进行
+2. **方向**：计算关键点邻域的质心方向（intensity centroid），实现旋转不变性
+3. **描述**：使用旋转后的 BRIEF 二进制描述子（256 bit），匹配时用汉明距离
 
-<quiz>
-3) GitHub Copilot在嵌入式开发中的主要应用场景包括？（多选）
-- [x] 外设驱动代码生成
-- [x] 寄存器配置建议
-- [x] 代码解释与重构
-- [ ] 硬件电路设计
+```python
+import cv2
 
-正确。GitHub Copilot主要用于代码层面的辅助编程，包括驱动生成、配置建议、代码解释和重构等，但不涉及硬件电路设计。
-</quiz>
+# ORB 特征检测与匹配
+orb = cv2.ORB_create(nfeatures=500)
 
-<quiz>
-4) 在VSCode中进行ARM Cortex-M调试，需要安装以下哪个插件？
-- [ ] C/C++ Extension Pack
-- [x] Cortex-Debug
-- [ ] PlatformIO IDE
-- [ ] DeviceTree
+img1 = cv2.imread('frame_001.jpg', cv2.IMREAD_GRAYSCALE)
+img2 = cv2.imread('frame_002.jpg', cv2.IMREAD_GRAYSCALE)
 
-正确。Cortex-Debug插件专门用于ARM Cortex-M芯片的调试支持，配合GDB和OpenOCD使用。
-</quiz>
+# 检测关键点和描述子
+kp1, des1 = orb.detectAndCompute(img1, None)
+kp2, des2 = orb.detectAndCompute(img2, None)
 
-<quiz>
-5) Docker容器化嵌入式开发环境的主要优势是？（多选）
-- [x] 环境一致性
-- [x] 可移植性
-- [x] 依赖隔离
-- [ ] 编译速度更快
+# 暴力匹配（汉明距离）
+bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
+matches = bf.match(des1, des2)
+matches = sorted(matches, key=lambda x: x.distance)
 
-正确。Docker容器提供环境一致性、可移植性和依赖隔离，但编译速度通常不会比原生环境更快。
-</quiz>
+print(f"检测到 {len(kp1)} 和 {len(kp2)} 个关键点")
+print(f"匹配到 {len(matches)} 对特征")
+print(f"最佳匹配距离: {matches[0].distance}")
+```
 
-<quiz>
-6) 嵌入式项目的.gitignore文件应包含以下哪些内容？（多选）
-- [x] 编译生成的.elf/.hex/.bin文件
-- [x] IDE项目文件（如.vscode/、.idea/）
-- [ ] 源代码文件（.c/.h）
-- [x] 操作系统临时文件（.DS_Store、Thumbs.db）
+#### 12.3.3 特征匹配与外点剔除
 
-正确。.gitignore应忽略编译产物、IDE配置文件和操作系统临时文件，但源代码文件必须纳入版本控制。
-</quiz>
+匹配中常有错误匹配（outlier），使用 RANSAC 算法估计基础矩阵的同时剔除外点：
 
-<quiz>
-7) Git Flow工作流中，用于集成新功能的长期分支是？
-- [ ] main
-- [x] develop
-- [ ] feature/*
-- [ ] release/*
+```python
+# 提取匹配点坐标
+pts1 = np.float32([kp1[m.queryIdx].pt for m in matches])
+pts2 = np.float32([kp2[m.trainIdx].pt for m in matches])
 
-正确。develop分支是Git Flow中的开发集成分支，用于集成本轮迭代的所有feature分支。
-</quiz>
+# RANSAC 估计基础矩阵，同时剔除外点
+F, mask = cv2.findFundamentalMat(pts1, pts2, cv2.FM_RANSAC, 1.0, 0.99)
+inlier_matches = [m for m, flag in zip(matches, mask.ravel()) if flag]
 
-<quiz>
-8) 对于嵌入式项目中的大文件（如固件镜像、PDF文档），推荐使用以下哪种方式管理？
-- [ ] 直接提交到Git仓库
-- [ ] 使用外部网盘存储
-- [x] Git LFS（Large File Storage）
-- [ ] 压缩后提交
+print(f"RANSAC 后内点数: {len(inlier_matches)} / {len(matches)}")
+```
 
-正确。Git LFS专门用于管理Git仓库中的大文件，将大文件存储在外部服务器，Git仓库中只保留指针。
-</quiz>
+### 12.4 立体视觉与深度估计
 
-<quiz>
-9) CI/CD在嵌入式开发中的主要作用是？（多选）
-- [x] 自动化构建
-- [x] 自动化测试
-- [ ] 替代人工编程
-- [x] 持续部署
+#### 12.4.1 双目视觉原理
 
-正确。CI/CD主要用于自动化构建、自动化测试和持续部署，但不能替代人工编程工作。
-</quiz>
+两个水平排列的相机同时拍摄同一场景，通过**视差**（disparity）计算深度：
 
-<quiz>
-10) 在配置VSCode的嵌入式开发环境时，c_cpp_properties.json文件的主要作用是？
-- [ ] 配置编译选项
-- [x] 配置IntelliSense智能提示
-- [ ] 配置调试器
-- [ ] 配置Git仓库
+```bob
+  "左相机"         "基线 b"         "右相机"
+     O_L ─────────────────────── O_R
+      \            |              /
+       \           | "深度 Z"     /
+        \          |            /
+         \         |           /
+          \        |          /
+           \       |         /
+            \      |        /
+             \     |       /
+              \    |      /
+               *───+────*
+            "P(X,Y,Z)"
+            
+  "视差" d = u_L - u_R
+  "深度" Z = f·b / d
+```
 
-正确。c_cpp_properties.json文件用于配置C/C++扩展的IntelliSense功能，包括头文件路径、宏定义、编译器路径等。
-</quiz>
+深度计算公式：
 
-<!-- mkdocs-quiz results -->
+$$Z = \frac{f \cdot b}{d} = \frac{f \cdot b}{u_L - u_R}$$
 
----
+其中 $b$ 为基线（两相机光心的距离），$f$ 为焦距，$d$ 为视差。
 
-### 12.8 本章总结
+#### 12.4.2 立体匹配算法
 
-本章系统介绍了三种主流的嵌入式开发环境配置方案：
+从左右图像中寻找对应点，计算每个像素的视差：
 
-1. **CubeIDE与Cube系列**：ST官方提供的一体化开发环境，通过图形化配置大幅简化硬件初始化工作，配合GitHub Copilot插件可显著提升开发效率。
+| 算法 | 类型 | 特点 |
+|------|------|------|
+| **BM** | 块匹配 | 速度快，适合实时；精度一般 |
+| **SGBM** | 半全局匹配 | 精度好，计算适中；OpenCV 推荐 |
+| **ELAS** | 概率匹配 | 高精度，支持稀疏/稠密 |
+| **RAFT-Stereo** | 深度学习 | 最高精度，需 GPU |
 
-2. **VSCode开发环境**：轻量灵活的开发环境，通过插件系统可实现从代码编辑、编译、调试到容器化构建的完整工作流，适合追求高度定制化的开发者。
+```python
+import cv2
+import numpy as np
 
-3. **Git版本控制**：嵌入式开发不可或缺的版本管理工具，通过合理的分支策略、大文件管理和CI/CD集成，可实现高效的团队协作和质量保证。
+# SGBM 立体匹配
+left = cv2.imread('left.jpg', cv2.IMREAD_GRAYSCALE)
+right = cv2.imread('right.jpg', cv2.IMREAD_GRAYSCALE)
 
-通过本章学习，学生应能够根据项目需求选择合适的开发环境，并进行规范配置，为后续的嵌入式系统开发打下坚实基础。
+# 参数配置
+stereo = cv2.StereoSGBM_create(
+    minDisparity=0,
+    numDisparities=64,       # 视差搜索范围（必须是16的倍数）
+    blockSize=9,              # 匹配块大小
+    P1=8 * 3 * 9**2,        # 视差平滑惩罚项
+    P2=32 * 3 * 9**2,
+    disp12MaxDiff=1,
+    uniquenessRatio=10,
+    speckleWindowSize=100,
+    speckleRange=32
+)
 
----
+# 计算视差图
+disparity = stereo.compute(left, right).astype(np.float32) / 16.0
 
-本章参考资料：STM32CubeIDE用户手册、STM32CubeMX配置指南、GitHub Copilot官方文档、VSCode嵌入式开发教程、Git Pro书籍、Docker官方文档。
+# 视差 → 深度
+f = 500.0   # 焦距 (像素)
+b = 0.12    # 基线 12cm
+depth = np.where(disparity > 0, f * b / disparity, 0)
+
+print(f"深度范围: {depth[depth > 0].min():.2f} - {depth[depth > 0].max():.2f} m")
+```
+
+#### 12.4.3 RGB-D 相机
+
+RGB-D 相机（如 Intel RealSense）直接输出深度图，免去立体匹配计算：
+
+- **结构光**（D435/D455）：投射红外点阵，通过变形计算深度
+- **ToF**（L515/Azure Kinect）：测量红外光飞行时间
+
+ROS2 中读取 RGB-D 数据：
+
+```python
+# ROS2 RGB-D 订阅器
+import rclpy
+from rclpy.node import Node
+from sensor_msgs.msg import Image
+from cv_bridge import CvBridge
+
+class RGBDSubscriber(Node):
+    def __init__(self):
+        super().__init__('rgbd_subscriber')
+        self.bridge = CvBridge()
+        
+        self.rgb_sub = self.create_subscription(
+            Image, '/camera/color/image_raw', self.rgb_callback, 10)
+        self.depth_sub = self.create_subscription(
+            Image, '/camera/depth/image_rect_raw', self.depth_callback, 10)
+    
+    def rgb_callback(self, msg):
+        cv_image = self.bridge.imgmsg_to_cv2(msg, 'bgr8')
+        # 处理 RGB 图像...
+    
+    def depth_callback(self, msg):
+        depth_image = self.bridge.imgmsg_to_cv2(msg, 'passthrough')
+        # depth_image: uint16, 单位 mm
+        depth_meters = depth_image.astype(np.float32) / 1000.0
+        # 处理深度图像...
+```
+
+### 12.5 三维点云处理
+
+#### 12.5.1 点云基础
+
+三维点云是三维空间中点的集合，每个点至少包含 $(x, y, z)$ 坐标，可附加颜色、法向量等信息。
+
+```bob
+  "点云数据结构"
+  
+  +--------+--------+--------+-------+-------+-------+
+  |  x_1   |  y_1   |  z_1   |  r_1  |  g_1  |  b_1  |
+  +--------+--------+--------+-------+-------+-------+
+  |  x_2   |  y_2   |  z_2   |  r_2  |  g_2  |  b_2  |
+  +--------+--------+--------+-------+-------+-------+
+  |  ...   |  ...   |  ...   |  ...  |  ...  |  ...  |
+  +--------+--------+--------+-------+-------+-------+
+  |  x_N   |  y_N   |  z_N   |  r_N  |  g_N  |  b_N  |
+  +--------+--------+--------+-------+-------+-------+
+  
+  "典型点云大小：LiDAR 一帧约 10 万点"
+```
+
+#### 12.5.2 点云处理常用操作
+
+```python
+import open3d as o3d
+import numpy as np
+
+# 读取点云
+pcd = o3d.io.read_point_cloud("scene.pcd")
+
+# 1. 下采样（体素滤波）—— 降低数据量
+pcd_down = pcd.voxel_down_sample(voxel_size=0.02)  # 2cm 体素
+
+# 2. 统计离群点移除
+pcd_clean, ind = pcd_down.remove_statistical_outlier(
+    nb_neighbors=20, std_ratio=2.0)
+
+# 3. 法向量估计
+pcd_clean.estimate_normals(
+    search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=0.1, max_nn=30))
+
+# 4. 平面分割（RANSAC）
+plane_model, inliers = pcd_clean.segment_plane(
+    distance_threshold=0.01, ransac_n=3, num_iterations=1000)
+[a, b, c, d] = plane_model
+print(f"检测到平面: {a:.2f}x + {b:.2f}y + {c:.2f}z + {d:.2f} = 0")
+
+# 分离地面和物体
+ground = pcd_clean.select_by_index(inliers)
+objects = pcd_clean.select_by_index(inliers, invert=True)
+
+# 5. 聚类分割（DBSCAN）
+labels = np.array(objects.cluster_dbscan(eps=0.05, min_points=10))
+n_clusters = labels.max() + 1
+print(f"检测到 {n_clusters} 个物体簇")
+```
+
+#### 12.5.3 点云配准（ICP）
+
+**ICP**（Iterative Closest Point）算法将两帧点云对齐，是 3D SLAM 的核心组件：
+
+```bob
+  "源点云"         "ICP 迭代"        "对齐后"
+    .  .             .               . .
+   . .  .    ──→    . . ──→   ──→   . . .
+  .  . .           . .  .           . . .
+        "目标点云"     "逐步收敛"      "重合"
+```
+
+```python
+# ICP 点云配准
+source = o3d.io.read_point_cloud("frame_001.pcd")
+target = o3d.io.read_point_cloud("frame_002.pcd")
+
+# 初始变换猜测（可从IMU/里程计获取）
+init_transform = np.eye(4)
+
+# Point-to-Plane ICP（比 Point-to-Point 更精确）
+result = o3d.pipelines.registration.registration_icp(
+    source, target, max_correspondence_distance=0.05,
+    init=init_transform,
+    estimation_method=o3d.pipelines.registration.TransformationEstimationPointToPlane()
+)
+
+print(f"变换矩阵:\n{result.transformation}")
+print(f"内点比例: {result.fitness:.2%}")
+print(f"RMSE: {result.inlier_rmse:.4f} m")
+```
+
+### 12.6 视觉里程计（VO）
+
+视觉里程计通过连续图像帧之间的运动估计，计算相机（机器人）的位姿变化。
+
+#### 12.6.1 特征点法 VO
+
+```bob
+  "帧 t-1"          "帧 t"
++----------+     +----------+
+|  .  .    |     |    .  .  |     "匹配特征点"
+|    .   . | ──→ | .    .   | ──→ "估计本质矩阵 E"
+| .    .   |     |   .    . |     "恢复 R, t"
++----------+     +----------+     "三角化得3D点"
+```
+
+流程：
+
+1. 在帧 $t-1$ 和帧 $t$ 中检测 ORB 特征并匹配
+2. 使用对极约束估计**本质矩阵** $\mathbf{E}$
+3. 从 $\mathbf{E}$ 分解出旋转 $\mathbf{R}$ 和平移 $\mathbf{t}$
+4. 三角化匹配点获得 3D 地图点
+5. 累积运动得到轨迹
+
+```python
+import cv2
+import numpy as np
+
+class MonocularVO:
+    def __init__(self, K):
+        self.K = K  # 相机内参
+        self.orb = cv2.ORB_create(1000)
+        self.bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
+        self.prev_frame = None
+        self.prev_kp = None
+        self.prev_des = None
+        self.pose = np.eye(4)  # 累积位姿
+    
+    def process_frame(self, frame):
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        kp, des = self.orb.detectAndCompute(gray, None)
+        
+        if self.prev_frame is not None and des is not None and self.prev_des is not None:
+            matches = self.bf.match(self.prev_des, des)
+            matches = sorted(matches, key=lambda x: x.distance)[:100]
+            
+            if len(matches) > 10:
+                pts1 = np.float32([self.prev_kp[m.queryIdx].pt for m in matches])
+                pts2 = np.float32([kp[m.trainIdx].pt for m in matches])
+                
+                # 估计本质矩阵
+                E, mask = cv2.findEssentialMat(
+                    pts1, pts2, self.K, method=cv2.RANSAC, prob=0.999, threshold=1.0)
+                
+                # 恢复 R, t
+                _, R, t, mask = cv2.recoverPose(E, pts1, pts2, self.K)
+                
+                # 构建变换矩阵并累积
+                T = np.eye(4)
+                T[:3, :3] = R
+                T[:3, 3] = t.flatten()
+                self.pose = self.pose @ np.linalg.inv(T)
+        
+        self.prev_frame = gray
+        self.prev_kp = kp
+        self.prev_des = des
+        
+        return self.pose[:3, 3]  # 返回当前位置
+```
+
+#### 12.6.2 直接法 VO
+
+与特征点法不同，直接法不提取特征，而是直接最小化像素灰度误差：
+
+$$\min_{\mathbf{T}} \sum_{i} \left\| I_2(\pi(\mathbf{T} \cdot \mathbf{P}_i)) - I_1(\pi(\mathbf{P}_i)) \right\|^2$$
+
+| 方法 | 优点 | 缺点 |
+|------|------|------|
+| **特征点法** | 对光照变化鲁棒，匹配可靠 | 特征提取耗时，纹理弱区域失效 |
+| **直接法** | 利用所有像素信息，纹理弱区域可用 | 对光照变化敏感，需要好的初值 |
+
+### 12.7 目标检测与语义感知
+
+#### 12.7.1 从几何到语义
+
+传统机器人感知只关注"哪里有障碍物"（几何信息），现代机器人还需要理解"这是什么"（语义信息）。
+
+```bob
+  "几何感知"                              "语义感知"
++--------------------+              +--------------------+
+|                    |              |   "椅子"            |
+|    "障碍物"   .    |              |      .    "桌子"    |
+|    .  .   .        |     ──→     |   "人" .   .        |
+|       .            |              |      "门"           |
++--------------------+              +--------------------+
+  "只知道有东西"                       "知道是什么"
+```
+
+#### 12.7.2 YOLO 目标检测
+
+YOLO（You Only Look Once）是实时目标检测的代表算法：
+
+```python
+from ultralytics import YOLO
+import cv2
+
+# 加载预训练模型
+model = YOLO('yolov8n.pt')  # nano 模型，适合边缘设备
+
+# 推理
+cap = cv2.VideoCapture(0)
+while cap.isOpened():
+    ret, frame = cap.read()
+    if not ret:
+        break
+    
+    results = model(frame)
+    
+    for result in results:
+        for box in result.boxes:
+            x1, y1, x2, y2 = box.xyxy[0].int().tolist()
+            cls = int(box.cls[0])
+            conf = float(box.conf[0])
+            label = f"{model.names[cls]} {conf:.2f}"
+            
+            cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+            cv2.putText(frame, label, (x1, y1-10),
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+    
+    cv2.imshow('Detection', frame)
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        break
+```
+
+#### 12.7.3 语义分割
+
+语义分割为每个像素分配类别标签，比目标检测提供更精细的信息：
+
+| 任务 | 输出 | 典型模型 | 应用场景 |
+|------|------|---------|---------|
+| 目标检测 | 边界框 + 类别 | YOLOv8, RT-DETR | 物体识别 |
+| 语义分割 | 每像素类别 | DeepLabV3, SegFormer | 可通行区域分析 |
+| 实例分割 | 每像素类别+实例ID | Mask R-CNN, SAM | 精细抓取规划 |
+| 全景分割 | 语义+实例 | Panoptic-DeepLab | 场景完整理解 |
+
+#### 12.7.4 在机器人中的应用
+
+语义感知与几何感知结合，形成**语义地图**：
+
+1. 目标检测 → SLAM 中的语义地标（"这个点是椅子"）
+2. 语义分割 → 可通行区域判断（"地面可走，墙不可走"）
+3. 3D 语义 → 场景图（Scene Graph）构建，支持自然语言交互
+
+### 12.8 视觉惯性里程计（VIO）
+
+将视觉里程计（VO）与 IMU 融合，结合了视觉的长期稳定性和 IMU 的高频短期精度，是现代手机和无人机定位的核心方案。
+
+#### 12.8.1 VIO 架构
+
+```bob
+  "相机"                           "IMU"
+ (15-30 Hz)                     (200-1000 Hz)
+    |                                |
+    v                                v
++--------+                    +-----------+
+|"特征"   |                    | "预积分"   |
+|"提取"   |                    | "(第9章)"  |
++----+---+                    +-----+-----+
+     |                              |
+     +-------------+----------------+
+                   |
+                   v
+            +------+------+
+            |  "紧耦合"    |
+            |  "优化/滤波" |
+            +------+------+
+                   |
+                   v
+            "位姿 + 速度 + IMU偏置"
+```
+
+| VIO 方案 | 类型 | 特点 |
+|----------|------|------|
+| **MSCKF** | 滤波（EKF） | 计算高效，适合移动端 |
+| **VINS-Mono** | 优化（滑动窗口） | 精度高，开源，支持回环 |
+| **ORB-SLAM3** | 优化（关键帧） | 支持单目/双目/RGB-D+IMU |
+| **Basalt** | 优化 | TUM 出品，精度和速度兼顾 |
+
+### 12.9 视觉感知在 ROS2 中的集成
+
+#### 12.9.1 image_transport
+
+ROS2 中图像传输使用 `image_transport` 包，支持压缩传输以节省带宽：
+
+| Transport | 压缩率 | 延迟 | 适用场景 |
+|-----------|--------|------|---------|
+| raw | 1x | 最低 | 本机通信 |
+| compressed | 10-50x | 低 | WiFi 网络 |
+| theora | 50-100x | 中 | 视频流 |
+
+#### 12.9.2 常用视觉相关 ROS2 包
+
+| 包名 | 功能 | 输入/输出 |
+|------|------|----------|
+| `image_pipeline` | 去畸变、立体处理、深度转点云 | Image → PointCloud2 |
+| `vision_opencv` | OpenCV 与 ROS 消息互转 | cv_bridge |
+| `image_proc` | 去畸变、颜色转换 | Image → Image |
+| `depth_image_proc` | 深度图转点云 | Image + CameraInfo → PointCloud2 |
+| `darknet_ros` | YOLO 检测 | Image → BoundingBoxes |
+
+### 12.10 小结与习题
+
+本章介绍了机器人视觉感知的核心技术，从相机模型、特征检测、立体视觉到目标检测和视觉里程计。这些内容为第13章 SLAM 和第14章导航提供了感知层的理论基础。
+
+```bob
++--------+     +--------+     +--------+     +--------+     +--------+
+|"相机"   |     |"特征"   |     |"立体"   |     |"点云"   |     |"语义"   |
+|"模型"   |---->|"检测"   |---->|"视觉"   |---->|"处理"   |---->|"感知"   |
++--------+     +--------+     +--------+     +--------+     +--------+
+     |                              |               |              |
+     v                              v               v              v
+ "标定"                          "深度图"        "3D SLAM"      "语义地图"
+ "(第12.2节)"                   "(第12.4节)"    "(第13章)"     "(第16章)"
+```
+
+#### 习题
+
+??? question "12-1 相机标定精度"
+    采集至少 15 张不同角度的棋盘格标定图像，完成相机标定。重投影误差控制在什么范围内才算合格？畸变系数 $k_1, k_2$ 分别对应什么类型的畸变？
+
+??? question "12-2 ORB 特征"
+    对同一场景在不同光照条件下（强光/弱光/侧光）拍摄图像，测试 ORB 特征的匹配正确率。与 SIFT 对比，ORB 在什么条件下表现更差？
+
+??? question "12-3 双目深度计算"
+    已知相机焦距 $f = 500$ px，基线 $b = 12$ cm。如果视差 $d = 10$ px，对应深度是多少？视差精度为 $\pm 0.5$ px 时，深度估计的不确定性有多大？
+
+??? question "12-4 ICP 配准"
+    使用 Open3D 对两帧有重叠的点云进行 ICP 配准。讨论：（1）初始猜测对 ICP 收敛的影响；（2）Point-to-Point 和 Point-to-Plane ICP 的区别。
+
+??? question "12-5 综合设计"
+    设计一个基于 ROS2 的视觉里程计节点：（1）订阅相机话题，提取 ORB 特征；（2）帧间匹配估计运动；（3）发布 `/visual_odom` TF 变换和里程计消息。讨论单目 VO 的尺度模糊问题及其解决方案。

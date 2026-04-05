@@ -8,6 +8,10 @@ number headings: first-level 2, start-at 10
 
 第8章介绍的 PID 控制器是工业中应用最广泛的控制方法，但在以下场景中存在明显局限：
 
+
+**表 10-1** 
+<!-- tab:ch10-1  -->
+
 | 局限场景 | 具体问题 | 需要的高级方法 |
 |---------|---------|--------------|
 | **多环嵌套** | 位置控制需要内嵌速度控制 | 串级 PID |
@@ -20,8 +24,10 @@ number headings: first-level 2, start-at 10
 ```bob
                     "高级运动控制方法图谱"
                     
+
   "经典 PID"                                       "最优控制"
 +------------+                                   +----------+
+
 | "单环 PID"  |                                   | "MPC"    |
 | "(第8章)"   |                                   | "LQR"   |
 +-----+------+                                   +----+-----+
@@ -42,6 +48,10 @@ number headings: first-level 2, start-at 10
                                 +-----------+
 ```
 
+**图 10-1** 高级运动控制方法总览图
+<!-- fig:ch10-1 高级运动控制方法总览图 -->
+
+
 ### 10.2 串级 PID 控制
 
 #### 10.2.1 单环 vs 串级结构
@@ -53,13 +63,19 @@ number headings: first-level 2, start-at 10
 ```bob
                      "串级 PID 结构"
 
+
 "位置目标" --+   "外环"     "速度目标"    "内环"     "PWM"     "电机"    "位置"
+
   x_ref    -+--->[ PID_pos ]---v_ref--->[ PID_vel ]---u--->[ Motor ]---+-> x
             ^-                          ^-                             |
             |                           |                              |
             +--------"位置反馈"----------+-------"速度反馈"-------------+
                      "编码器位置"                 "编码器速度"
 ```
+
+**图 10-2** 
+<!-- fig:ch10-2  -->
+
 
 #### 10.2.2 设计原则
 
@@ -70,8 +86,10 @@ number headings: first-level 2, start-at 10
 #### 10.2.3 实现代码
 
 ```c
+
 typedef struct {
     float kp, ki, kd;
+
     float integral;
     float prev_error;
     float output_min, output_max;
@@ -136,6 +154,10 @@ $$u(t) = u_{ff}(t) + u_{fb}(t)$$
                   └──────────────────────────────────────────────┘
 ```
 
+**图 10-3** 
+<!-- fig:ch10-3  -->
+
+
 #### 10.3.2 速度前馈
 
 对于电机速度控制，如果已知期望速度轨迹 $v_d(t)$，前馈项可以直接计算为：
@@ -144,7 +166,9 @@ $$u_{ff} = \frac{v_d}{K_v}$$
 
 其中 $K_v$ 是电机电压-速度比例常数（空载时 $v \approx K_v \cdot u$）。
 
+
 #### 10.3.3 加速度前馈
+
 
 对于位置控制，还可以加入加速度前馈：
 
@@ -174,6 +198,10 @@ $$u_{ff} = \frac{\dot{v}_d}{K_a} + \frac{v_d}{K_v}$$
     "加速"  "匀速" "减速"
 ```
 
+**图 10-4** 
+<!-- fig:ch10-4  -->
+
+
 ```python
 def trapezoidal_profile(s_total, v_max, a_max, dt=0.001):
     """生成梯形速度曲线"""
@@ -181,8 +209,10 @@ def trapezoidal_profile(s_total, v_max, a_max, dt=0.001):
     t_acc = v_max / a_max
     s_acc = 0.5 * a_max * t_acc**2
     
+
     if 2 * s_acc > s_total:
         # 距离不够达到最大速度，变为三角形曲线
+
         t_acc = np.sqrt(s_total / a_max)
         v_peak = a_max * t_acc
         t_cruise = 0
@@ -237,13 +267,19 @@ def trapezoidal_profile(s_total, v_max, a_max, dt=0.001):
   "7段加速度"            "S 形速度"             "平滑位置"
 ```
 
+**图 10-5** 
+<!-- fig:ch10-5  -->
+
+
 七段包括：加加速 → 匀加速 → 减加速 → 匀速 → 加减速 → 匀减速 → 减减速。
 
 #### 10.4.3 五次多项式轨迹
 
 对于给定起止位置、速度、加速度的点到点运动，五次多项式可以保证连续到加速度级别：
 
+
 $$s(t) = a_0 + a_1 t + a_2 t^2 + a_3 t^3 + a_4 t^4 + a_5 t^5$$
+
 
 6 个系数由 6 个边界条件确定：起点和终点的位置、速度、加速度。
 
@@ -299,13 +335,19 @@ MPC 在每个控制周期内求解一个**有限时域最优化问题**：
    "状态"                   "第1步"
 ```
 
+**图 10-6** 
+<!-- fig:ch10-6  -->
+
+
 #### 10.5.2 线性 MPC 公式
 
 对线性系统 $\mathbf{x}_{k+1} = \mathbf{A}\mathbf{x}_k + \mathbf{B}\mathbf{u}_k$，MPC 求解：
 
 $$\min_{\mathbf{u}_0, \ldots, \mathbf{u}_{N-1}} \sum_{k=0}^{N-1} \left[ (\mathbf{x}_k - \mathbf{x}_k^{ref})^T \mathbf{Q} (\mathbf{x}_k - \mathbf{x}_k^{ref}) + \mathbf{u}_k^T \mathbf{R} \mathbf{u}_k \right] + (\mathbf{x}_N - \mathbf{x}_N^{ref})^T \mathbf{Q}_f (\mathbf{x}_N - \mathbf{x}_N^{ref})$$
 
+
 $$\text{s.t.} \quad \mathbf{x}_{k+1} = \mathbf{A}\mathbf{x}_k + \mathbf{B}\mathbf{u}_k$$
+
 $$\mathbf{u}_{min} \leq \mathbf{u}_k \leq \mathbf{u}_{max}$$
 $$\mathbf{x}_{min} \leq \mathbf{x}_k \leq \mathbf{x}_{max}$$
 
@@ -369,6 +411,10 @@ class DiffDriveMPC:
 
 #### 10.5.4 MPC vs PID 对比
 
+
+**表 10-2** 
+<!-- tab:ch10-2  -->
+
 | 维度 | PID | MPC |
 |------|-----|-----|
 | 理论基础 | 经验法则 | 最优控制理论 |
@@ -377,6 +423,7 @@ class DiffDriveMPC:
 | 计算量 | 极低 | 需要在线求解优化 |
 | 实时性 | 微秒级 | 毫秒级（取决于预测步长） |
 | 适用平台 | 任何微控制器 | 需要一定算力（STM32H7 或更高） |
+
 
 ### 10.6 自适应与鲁棒控制概念
 
@@ -399,11 +446,17 @@ PID 和 MPC 都依赖准确的系统模型参数。但实际中：
               "（在线辨识）" <─────────────────┘
 ```
 
+**图 10-7** 
+<!-- fig:ch10-7  -->
+
+
 #### 10.6.2 模型参考自适应控制（MRAC）
 
 核心思想：设计一个"参考模型"描述期望的闭环行为，自适应律不断调整控制器参数，使实际系统行为趋近参考模型。
 
+
 #### 10.6.3 鲁棒控制
+
 
 与自适应控制不同，**鲁棒控制**不尝试辨识不确定性，而是设计控制器使其在所有可能的不确定性范围内都能保证稳定性和性能。
 
@@ -432,10 +485,16 @@ PID 和 MPC 都依赖准确的系统模型参数。但实际中：
                     "TIM3 编码器模式"              +--------+
 ```
 
+**图 10-8** 
+<!-- fig:ch10-8  -->
+
+
 #### 10.7.2 完整串级 PID 实现
+
 
 ```c
 #include "stm32f1xx_hal.h"
+
 
 // 编码器读取
 #define ENCODER_PPR  1320    // 每转脉冲数（含减速比）
@@ -519,9 +578,15 @@ $$\omega = \omega_r + v_r (k_2 e_y + k_3 \sin e_\theta)$$
   "角速度"   ω = v · κ
 ```
 
+**图 10-9** 
+<!-- fig:ch10-9  -->
+
+
 算法步骤：
 
+
 1. 在路径上找到距机器人前视距离 $L_d$ 处的目标点
+
 2. 计算机器人到目标点的方向角 $\alpha$
 3. 计算转向曲率 $\kappa = \frac{2 \sin\alpha}{L_d}$
 4. 输出角速度 $\omega = v \cdot \kappa$
@@ -588,7 +653,12 @@ Stanley 控制器是 Stanford 大学在 DARPA Grand Challenge 中使用的路径
           "θ_e 航向偏差"
 ```
 
+**图 10-10** 
+<!-- fig:ch10-10  -->
+
+
 转向角公式：
+
 
 $$\delta = \theta_e + \arctan\left(\frac{k \cdot e}{v}\right)$$
 
@@ -603,6 +673,10 @@ $$\delta = \theta_e + \arctan\left(\frac{k \cdot e}{v}\right)$$
 
 #### 10.8.4 三种路径跟踪方法对比
 
+
+**表 10-3** 
+<!-- tab:ch10-3  -->
+
 | 维度 | 纯追踪 | Stanley | Lyapunov |
 |------|--------|---------|----------|
 | 参考点 | 前视距离处 | 最近路径点 | 参考轨迹点 |
@@ -611,6 +685,7 @@ $$\delta = \theta_e + \arctan\left(\frac{k \cdot e}{v}\right)$$
 | 转弯性能 | 转弯内切 | 反应灵敏 | 理论最优 |
 | 实现复杂度 | 低 | 中 | 高 |
 | 典型应用 | ROS2 Nav2 插件 | 自动驾驶 | 学术研究 |
+
 
 ### 10.9 综合实验：轨迹跟踪控制
 
@@ -653,6 +728,10 @@ $$\delta = \theta_e + \arctan\left(\frac{k \cdot e}{v}\right)$$
   "起点"        "直线段"                  "终点"
 ```
 
+**图 10-11** 
+<!-- fig:ch10-11  -->
+
+
 ### 10.10 小结与习题
 
 本章从 PID 出发，扩展到串级控制、前馈补偿、轨迹生成、MPC 和路径跟踪等高级运动控制方法。这些方法构成机器人"小脑"的执行层——将大脑规划的路径转化为精确、平滑的运动。
@@ -667,6 +746,10 @@ $$\delta = \theta_e + \arctan\left(\frac{k \cdot e}{v}\right)$$
  "底层电机"                    "平滑运动"                     "大脑规划"
  "(第6,8章)"                  "（无冲击）"                   "(第14章Nav2)"
 ```
+
+**图 10-12** 
+<!-- fig:ch10-12  -->
+
 
 #### 习题
 

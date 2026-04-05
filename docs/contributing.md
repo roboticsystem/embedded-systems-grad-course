@@ -143,6 +143,28 @@ number headings: first-level 2, start-at N
 - 列宽适中，避免单行过长
 - 对比表、参数表、选型表是本教材的**核心表达方式**，鼓励多用
 
+### 4.4 图表编号与交叉引用
+
+全书图表由 `scripts/auto_number_figures_tables.py` 自动编号，编号格式为 `图 X-Y` / `表 X-Y`（X = 章号，Y = 序号）。
+
+**编号标记**：每个图下方和每个表上方各有一对标记行：
+
+```markdown
+**图 1-3** 描述文字
+<!-- fig:ch1-3 描述文字 -->
+```
+
+**交叉引用**：在正文中用自然中文引用图表，无需特殊语法：
+
+```markdown
+如图 1-3 所示，最小系统由电源、时钟、复位等电路组成。
+具体参数见表 2-1。
+```
+
+当图表增删导致编号变化时，运行脚本会自动更新所有引用。排除规则：代码围栏内部、bold 标题行、HTML 注释 marker 行中的编号不会被替换。
+
+详细约定参见 `.github/skills/auto-figure-table-numbering/SKILL.md`。
+
 ---
 
 ## 5. 代码块
@@ -159,6 +181,7 @@ number headings: first-level 2, start-at N
 | XML | `xml` | ` ```xml ` |
 | Shell | `bash` | ` ```bash ` |
 | 伪代码 | `text` | ` ```text ` |
+
 
 ### 5.2 代码质量
 
@@ -332,3 +355,5 @@ mkdocs serve
 | `$$` 未独占行 | KaTeX 公式不渲染 | `$$` 上下各空一行 |
 | 裸代码块 | 无语法高亮 | 添加语言标注 |
 | quiz 标签嵌套错误 | 测验不交互 | 检查 quiz 开始/结束标签配对 |
+
+

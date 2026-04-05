@@ -14,12 +14,17 @@ number headings: first-level 2, start-at 18
 
 #### 18.1.2 学习目标
 
+
+**表 18-1** 
+<!-- tab:ch18-1  -->
+
 | 目标 | 具体内容 | 涉及章节 |
 |------|---------|----------|
 | URDF 建模 | Gazebo 仿真环境搭建、轮椅 URDF 模型创建 | 第7章 仿真 |
 | SLAM 建图 | SLAM Toolbox 建图流程与参数调优 | 第13章 SLAM |
 | 自主导航 | Nav2 导航栈配置、多点巡航编程 | 第14章 导航 |
 | 传感器仿真 | 激光雷达、IMU、里程计数据流 | 第9章 传感器 |
+
 
 #### 18.1.3 系统架构
 
@@ -55,11 +60,17 @@ number headings: first-level 2, start-at 18
 +-------------------------------------------------------------------+
 ```
 
+**图 18-1** 
+<!-- fig:ch18-1  -->
+
+
 ### 18.2 环境搭建
 
 #### 18.2.1 ROS2 工作空间
 
+
 ```bash
+
 # 创建工作空间
 mkdir -p ~/wheelchair_ws/src
 cd ~/wheelchair_ws/src
@@ -212,10 +223,16 @@ ros2 pkg create wheelchair_navigation --build-type ament_cmake \
       |                  |    .pgm + .yaml  |
 ```
 
+**图 18-2** 
+<!-- fig:ch18-2  -->
+
+
 #### 18.3.2 操作命令
+
 
 ```bash
 # 终端 1：启动 Gazebo 仿真
+
 ros2 launch wheelchair_gazebo hospital_world.launch.py
 
 # 终端 2：启动 SLAM Toolbox
@@ -231,6 +248,10 @@ ros2 run nav2_map_server map_saver_cli -f ~/maps/hospital
 
 #### 18.3.3 SLAM 参数调优
 
+
+**表 18-2** 
+<!-- tab:ch18-2  -->
+
 | 参数 | 推荐值 | 说明 |
 |------|--------|------|
 | `resolution` | 0.05 | 地图分辨率（m/pixel），越小越精细但内存越大 |
@@ -238,6 +259,7 @@ ros2 run nav2_map_server map_saver_cli -f ~/maps/hospital
 | `minimum_travel_distance` | 0.3 | 触发新匹配的最小位移（m） |
 | `minimum_travel_heading` | 0.3 | 触发新匹配的最小旋转（rad） |
 | `do_loop_closing` | true | 启用回环检测以修正累积误差 |
+
 
 #### 18.3.3b 参数配置文件
 
@@ -281,7 +303,12 @@ slam_toolbox:
   └───────────────┴──────────────┴──────────────────────────┘
 ```
 
+**图 18-3** 
+<!-- fig:ch18-3  -->
+
+
 #### 18.4.2 导航参数配置
+
 
 ```yaml
 # Nav2 参数文件
@@ -333,6 +360,10 @@ global_costmap:
       inflation_radius: 0.55
 ```
 
+
+**表 18-3** 
+<!-- tab:ch18-3  -->
+
 | 参数类别 | 关键参数 | 轮椅推荐值 | 理由 |
 |----------|---------|------------|------|
 | 速度限制 | `max_vel_x` | 0.5 m/s | 室内安全速度上限 |
@@ -341,6 +372,7 @@ global_costmap:
 | 旋转速度 | `max_vel_theta` | 0.8 rad/s | 避免乘客眩晕 |
 | 膨胀半径 | `inflation_radius` | 0.55 m | 轮椅半径 0.38m + 安全余量 |
 | 代价缩放 | `cost_scaling_factor` | 3.0 | 平衡安全与通过性 |
+
 
 #### 18.4.3 导航启动
 
@@ -427,6 +459,10 @@ if __name__ == '__main__':
       |                     +───────────────────> |
 ```
 
+**图 18-4** 
+<!-- fig:ch18-4  -->
+
+
 #### 18.5.2 多楼层地图管理
 
 在实际医院场景中，轮椅需要在多个楼层之间导航。可通过地图切换机制实现：
@@ -465,6 +501,10 @@ class MultiFloorNavigator:
 
 本章通过智能轮椅仿真项目，实践了机器人导航的完整技术栈：
 
+
+**表 18-4** 
+<!-- tab:ch18-4  -->
+
 | 实验环节 | 对应章节 | 关键技术 |
 |----------|---------|---------|
 | URDF 建模 | 第9章 ROS | 机器人描述、坐标系、TF |
@@ -472,6 +512,7 @@ class MultiFloorNavigator:
 | SLAM 建图 | 第10章 SLAM | SLAM Toolbox、激光匹配 |
 | Nav2 导航 | 第11章 导航 | A*、DWA、代价地图、AMCL |
 | 多点巡航 | 第12章 多机器人 | 任务编排、状态管理 |
+
 
 ### 18.7 本章测验
 

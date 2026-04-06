@@ -71,6 +71,8 @@ TAB_MARKER = re.compile(r'<!--\s*tab(?::ch[\w]+-\d+)?\s*(.*?)\s*-->')
 FIG_BOLD = re.compile(r'^\*\*图\s*[\w]+-\d+\*\*\s*(.*)')
 TAB_BOLD = re.compile(r'^\*\*表\s*[\w]+-\d+\*\*\s*(.*)')
 AUTOPLACEHOLDER = re.compile(r'<!--\s*autoplaceholder\s*-->')
+# 独立描述行（scan window 中遇到时跳过而非中断扫描）
+DESC_STANDALONE = re.compile(r'^(上[图表]|该[图表]|从上|通过上|如上|此[图表])')
 
 # 正文引用：图 X-Y 或 表 X-Y（含中文空格变体）
 REF_FIG = re.compile(r'图\s*([\w]+)-([\d]+)')
@@ -117,11 +119,11 @@ def scan_elements(lines: list) -> list:
             while j < n and not FENCE_END.match(lines[j].rstrip()):
                 j += 1
             end = j  # ``` 结束行
-            # 查找图说标记：在 end+1..end+4 范围内查找
+            # 查找图说标记：在 end+1..end+8 范围内查找
             caption = ''
             marker_line = None
             bold_line = None
-            for k in range(end + 1, min(end + 5, n)):
+            for k in range(end + 1, min(end + 9, n)):
                 lk = lines[k].strip()
                 if not lk:
                     continue
@@ -143,6 +145,8 @@ def scan_elements(lines: list) -> list:
                     if not caption:
                         caption = '（请补充图说）'
                     break
+                if DESC_STANDALONE.match(lk):
+                    continue  # 跳过独立描述行
                 break  # 遇到其他内容则停止
 
             elements.append(Element('fig', start, end, caption, marker_line, bold_line))
@@ -155,7 +159,7 @@ def scan_elements(lines: list) -> list:
                 caption = ''
                 marker_line = None
                 bold_line = None
-                for k in range(i + 1, min(i + 5, n)):
+                for k in range(i + 1, min(i + 9, n)):
                     lk = lines[k].strip()
                     if not lk:
                         continue
@@ -177,6 +181,8 @@ def scan_elements(lines: list) -> list:
                         if not caption:
                             caption = '（请补充图说）'
                         break
+                    if DESC_STANDALONE.match(lk):
+                        continue  # 跳过独立描述行
                     break
                 elements.append(Element('fig', i, i, caption, marker_line, bold_line))
             i += 1
@@ -198,7 +204,7 @@ def scan_elements(lines: list) -> list:
                 caption = ''
                 marker_line = None
                 bold_line = None
-                for k in range(start - 1, max(start - 5, -1), -1):
+                for k in range(start - 1, max(start - 9, -1), -1):
                     lk = lines[k].strip()
                     if not lk:
                         continue
@@ -220,10 +226,12 @@ def scan_elements(lines: list) -> list:
                         if not caption:
                             caption = '（请补充表说）'
                         break
+                    if DESC_STANDALONE.match(lk):
+                        continue  # 跳过独立描述行
                     break
                 # 也检查表格后的 autoplaceholder（之前脚本插入在后方的）
                 if not marker_line:
-                    for k in range(end + 1, min(end + 5, n)):
+                    for k in range(end + 1, min(end + 9, n)):
                         lk = lines[k].strip()
                         if not lk:
                             continue
@@ -279,6 +287,9 @@ def apply_numbering(lines: list, elements: list, chapter_id: str) -> list:
                 ops.append((el.marker_line, 'replace', marker_text))
             elif el.marker_line is not None and el.bold_line is None:
                 ops.append((el.marker_line, 'replace', f'\n{bold_text}{marker_text}'))
+            elif el.bold_line is not None and el.marker_line is None:
+                # bold 行存在但无 marker → 替换 bold 并在其后插入 marker
+                ops.append((el.bold_line, 'replace', f'{bold_text}{marker_text}'))
             else:
                 ops.append((el.end_line + 1, 'insert', f'\n{bold_text}{marker_text}'))
 
@@ -296,6 +307,9 @@ def apply_numbering(lines: list, elements: list, chapter_id: str) -> list:
                     ops.append((el.start_line, 'insert_before', f'{bold_text}{marker_text}\n'))
                 else:
                     ops.append((el.marker_line, 'replace', f'{bold_text}{marker_text}'))
+            elif el.bold_line is not None and el.marker_line is None:
+                # bold 行存在但无 marker → 替换 bold 并插入 marker
+                ops.append((el.bold_line, 'replace', f'{bold_text}{marker_text}'))
             else:
                 ops.append((el.start_line, 'insert_before', f'{bold_text}{marker_text}\n'))
 

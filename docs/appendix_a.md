@@ -1,7 +1,7 @@
 ---
 number headings: first-level 2, start-at 1
 ---
-## A 附录A：CubeMX 编程指南
+## A 附录 A：CubeMX 编程指南
 ### A.1 本章知识导图
 
 ```plantuml
@@ -77,7 +77,6 @@ number headings: first-level 2, start-at 1
 **图 A-1** 
 <!-- fig:chA-1  -->
 
-
 ---
 
 ### A.2 CubeMX 简介与安装
@@ -90,9 +89,8 @@ number headings: first-level 2, start-at 1
 
 CubeMX 解决的核心痛点：
 
-
-**表 A-1** 
-<!-- tab:chA-1  -->
+**表 A-1** A.2.1 工具定位
+<!-- tab:chA-1 A.2.1 工具定位 -->
 
 | 痛点 | 传统手写方式 | CubeMX 方式 |
 | ---- | ------------ | ----------- |
@@ -101,14 +99,11 @@ CubeMX 解决的核心痛点：
 | 外设初始化代码 | 手写数十行结构体赋值 | 图形配置后全部自动生成 |
 | FreeRTOS 移植 | 手动复制源码、修改配置 | 勾选即可，自动配置调度器 |
 
-上表对A.2.1 工具定位中各方案的特性进行了横向对比，便于读者根据实际需求选择最合适的技术路线。<!-- desc-auto -->
-
-
+上表对 A.2.1 工具定位中各方案的特性进行了横向对比，便于读者根据实际需求选择最合适的技术路线。
 
 #### A.2.2 安装方式
 
 CubeMX 提供两种使用方式，功能完全相同：
-
 
 ```bob
   方式一：STM32CubeIDE（推荐）
@@ -131,9 +126,8 @@ CubeMX 提供两种使用方式，功能完全相同：
  "下载：https://www.st.com/stm32cubemx"
 ```
 
-**图 A-2** 
-<!-- fig:chA-2  -->
-
+**图 A-2** A.2.2 安装方式
+<!-- fig:chA-2 A.2.2 安装方式 -->
 
 > **本课程推荐使用 STM32CubeIDE**，因为它将 CubeMX 配置、代码编辑、编译、烧录、调试集成在同一窗口，无需在多个软件间切换。
 
@@ -166,9 +160,8 @@ STM32CubeMX（或 CubeIDE 的 .ioc 编辑界面）分为五个主要区域：
   └─────────────────────────────────────────────────────────────────────┘
 ```
 
-**图 A-3** 
-<!-- fig:chA-3  -->
-
+**图 A-3** A.2.3 主界面布局
+<!-- fig:chA-3 A.2.3 主界面布局 -->
 
 ---
 
@@ -201,9 +194,8 @@ STM32CubeMX（或 CubeIDE 的 .ioc 编辑界面）分为五个主要区域：
   点击 Next → 填写工程名（如"LED_Blink）"→ Finish
 ```
 
-**图 A-4** 
-<!-- fig:chA-4  -->
-
+**图 A-4** A.3.1 步骤① 选择目标芯片
+<!-- fig:chA-4 A.3.1 步骤① 选择目标芯片 -->
 
 #### A.3.2 步骤② 系统配置（SYS / RCC）
 
@@ -216,9 +208,8 @@ STM32CubeMX（或 CubeIDE 的 .ioc 编辑界面）分为五个主要区域：
   （启用 SWD 调试接口，否则无法用 ST-Link 烧录和调试）
 ```
 
-**图 A-5** 
-<!-- fig:chA-5  -->
-
+**图 A-5** A.3.2 步骤② 系统配置（SYS / RCC）
+<!-- fig:chA-5 A.3.2 步骤② 系统配置（SYS / RCC） -->
 
 **配置 RCC（时钟源）：**
 
@@ -228,20 +219,17 @@ STM32CubeMX（或 CubeIDE 的 .ioc 编辑界面）分为五个主要区域：
   （启用外部 8MHz 晶振，为后续 PLL 倍频至 72MHz 提供精确时钟源）
 ```
 
-**图 A-6** 
-<!-- fig:chA-6  -->
-
+**图 A-6** A.3.2 步骤② 系统配置（SYS / RCC）
+<!-- fig:chA-6 A.3.2 步骤② 系统配置（SYS / RCC） -->
 
 > 完成后，芯片图上 PC14/PC15（晶振引脚）和 PA13/PA14（SWD 引脚）会自动变为绿色，无需手动分配。
 
 #### A.3.3 步骤③ 引脚功能分配
 
-
 在芯片引脚图上，**鼠标左键点击 PC13 引脚** → 从弹出菜单中选择 `GPIO_Output`：
 
 ```bob
   PC13 引脚配置过程：
-
 
        ↓
   左侧面板 → GPIO → PC13 出现在列表中
@@ -257,9 +245,8 @@ STM32CubeMX（或 CubeIDE 的 .ioc 编辑界面）分为五个主要区域：
   └──────────────────────────────────────┘
 ```
 
-**图 A-7** 
-<!-- fig:chA-7  -->
-
+**图 A-7** A.3.3 步骤③ 引脚功能分配
+<!-- fig:chA-7 A.3.3 步骤③ 引脚功能分配 -->
 
 #### A.3.4 步骤④ 时钟树配置
 
@@ -286,13 +273,12 @@ STM32CubeMX（或 CubeIDE 的 .ioc 编辑界面）分为五个主要区域：
   → CubeMX"自动完成所有分频/倍频参数的计算与填充"
 ```
 
-**图 A-8** 
-<!-- fig:chA-8  -->
-
+**图 A-8** A.3.4 步骤④ 时钟树配置
+<!-- fig:chA-8 A.3.4 步骤④ 时钟树配置 -->
 
 #### A.3.5 步骤⑤ 外设参数配置
 
-对于本示例（LED 闪烁），GPIO 已在步骤③配置完毕。若有其他外设（如 USART），在 `Pinout & Configuration` 左侧列表中展开对应类别进行配置（详见第4节）。
+对于本示例（LED 闪烁），GPIO 已在步骤③配置完毕。若有其他外设（如 USART），在 `Pinout & Configuration` 左侧列表中展开对应类别进行配置（详见第 4 节）。
 
 #### A.3.6 步骤⑥ 工程设置与代码生成
 
@@ -300,7 +286,6 @@ STM32CubeMX（或 CubeIDE 的 .ioc 编辑界面）分为五个主要区域：
 
 ```bob
   Project Manager 关键设置：
-
 
   ┌─────────────────────────────────────────────────────────┐
   │  Project Name:  "LED_Blink"                             │
@@ -321,9 +306,8 @@ STM32CubeMX（或 CubeIDE 的 .ioc 编辑界面）分为五个主要区域：
   弹出提示  Open Project?  → 点击 Yes，自动在 CubeIDE 中打开工程
 ```
 
-**图 A-9** 
-<!-- fig:chA-9  -->
-
+**图 A-9** A.3.6 步骤⑥ 工程设置与代码生成
+<!-- fig:chA-9 A.3.6 步骤⑥ 工程设置与代码生成 -->
 
 ---
 
@@ -356,9 +340,8 @@ CubeMX 生成的工程具有固定目录结构：
   └──"LED_Blink.elf"              ← 编译产物（二进制固件）
 ```
 
-**图 A-10** 
-<!-- fig:chA-10  -->
-
+**图 A-10** A.4.1 工程目录结构
+<!-- fig:chA-10 A.4.1 工程目录结构 -->
 
 > **规则**：只在 `Core/Src/` 和 `Core/Inc/` 中编写用户代码，`Drivers/` 目录内容不要手动修改。
 
@@ -372,7 +355,6 @@ CubeMX 根据 **User Label** 在 `main.h` 中自动生成宏定义：
 
 #define LED_GPIO_Port    GPIOC
 ```
-
 
 在 `main.c` 中使用宏定义而非硬编码引脚，好处：
 
@@ -418,11 +400,9 @@ int main(void)
 }
 ```
 
-常见 USER CODE 区域说明：
 
-
-**表 A-2** 
-<!-- tab:chA-2  -->
+**表 A-2** 常见 USER CODE 区域说明：
+<!-- tab:chA-2 常见 USER CODE 区域说明： -->
 
 | 区域标记 | 位置 | 适合写什么 |
 | -------- | ---- | ---------- |
@@ -434,9 +414,7 @@ int main(void)
 | `USER CODE BEGIN 2` | 初始化后 | 一次性启动逻辑 |
 | `USER CODE BEGIN WHILE` | while(1) 内 | 主循环业务逻辑 |
 
-
 > ⚠️ **警告**：写在 `USER CODE BEGIN/END` **之外**的代码，在下次执行 "Generate Code" 时会被 CubeMX **覆盖删除**。
-
 
 #### A.4.4 中断回调函数的编写规范
 
@@ -518,9 +496,8 @@ else
   → 自动分配：PA9 ="USART1_TX，PA10"="USART1_RX"
 ```
 
-**图 A-11** 
-<!-- fig:chA-11  -->
-
+**图 A-11** A.5.2 USART — 串口通信
+<!-- fig:chA-11 A.5.2 USART — 串口通信 -->
 
 生成代码中自动出现 `MX_USART1_UART_Init()`，用户调用 HAL API：
 
@@ -528,7 +505,6 @@ else
 /* USER CODE BEGIN Includes */
 #include <string.h>  /* for strlen */
 /* USER CODE END Includes */
-
 
 /* USER CODE BEGIN 2 */
 char msg[] = "Hello from STM32!\r\n";
@@ -565,9 +541,8 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) /* 接收完成回调 */
   → NVIC Settings: TIM2 global interrupt ☑ Enable
 ```
 
-**图 A-12** 
-<!-- fig:chA-12  -->
-
+**图 A-12** A.5.3 TIM — 定时器与 PWM
+<!-- fig:chA-12 A.5.3 TIM — 定时器与 PWM -->
 
 ```c
 /* USER CODE BEGIN 2 */
@@ -598,12 +573,10 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 **图 A-13** 
 <!-- fig:chA-13  -->
 
-
 ```c
 /* USER CODE BEGIN 2 */
 HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_1); /* 启动 PWM 输出 */
 /* USER CODE END 2 */
-
 
 /* 修改占空比（舵机位置控制）*/
 /* 脉宽 1ms(0°) ~ 2ms(180°)，对应 ARR=19999 时，CCR = 1000 ~ 2000 */
@@ -620,15 +593,13 @@ __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, 1500); /* 中间位置 90° */
   → PB6 ="I2C1_SCL，PB7"="I2C1_SDA（自动分配，需外接"4.7kΩ 上拉）
 ```
 
-**图 A-14** 
-<!-- fig:chA-14  -->
-
+**图 A-14** A.5.4 I2C — 总线通信
+<!-- fig:chA-14 A.5.4 I2C — 总线通信 -->
 
 ```c
 /* 向从设备地址 0x68（如 MPU6050）发送数据 */
 uint8_t data[2] = {0x6B, 0x00};   /* 寄存器地址，数据 */
 HAL_I2C_Master_Transmit(&hi2c1, 0x68 << 1, data, 2, HAL_MAX_DELAY);
-
 
 /* 从从设备读取 6 字节 */
 
@@ -652,16 +623,14 @@ HAL_I2C_Mem_Read(&hi2c1, 0x68 << 1,   /* 设备地址 */
       └── Scan Conversion Mode:       Disabled（单通道）
 ```
 
-**图 A-15** 
-<!-- fig:chA-15  -->
-
+**图 A-15** A.5.5 ADC — 模拟信号采集
+<!-- fig:chA-15 A.5.5 ADC — 模拟信号采集 -->
 
 ```c
 /* USER CODE BEGIN 2 */
 HAL_ADC_Start(&hadc1);                /* 启动 ADC 转换 */
 
 /* USER CODE END 2 */
-
 
 /* 读取 ADC 值（阻塞轮询）*/
 HAL_ADC_PollForConversion(&hadc1, HAL_MAX_DELAY);
@@ -689,15 +658,12 @@ float voltage = adc_val * 3.3f / 4095.0f;
        └── 点击 Add 可添加更多任务
 ```
 
-**图 A-16** 
-<!-- fig:chA-16  -->
-
+**图 A-16** 启用 FreeRTOS
+<!-- fig:chA-16 启用 FreeRTOS -->
 
 > ⚠️ 启用 FreeRTOS 后，CubeMX 会自动将 HAL 时基从 **SysTick** 改为 **TIM（如 TIM1）**，因为 FreeRTOS 自身需要独占 SysTick。
 
-
 ##### 2.5.6.2 创建任务
-
 
 在 CubeMX 的 FreeRTOS 配置页 → `Tasks and Queues` → `Add Task`：
 
@@ -712,12 +678,10 @@ float voltage = adc_val * 3.3f / 4095.0f;
   └─────────────────────────────────────────┘
 ```
 
-**图 A-17** 
-<!-- fig:chA-17  -->
-
+**图 A-17** 创建任务
+<!-- fig:chA-17 创建任务 -->
 
 生成代码后，在 `freertos.c` 的 `USER CODE BEGIN` 区填写任务逻辑：
-
 
 ```c
 
@@ -793,8 +757,8 @@ void StartProcessTask(void *argument)
 
 ##### 2.5.6.4 osDelay 与 HAL_Delay 的区别
 
-**表 A-3** 
-<!-- tab:chA-3  -->
+**表 A-3** osDelay 与 HAL_Delay 的区别
+<!-- tab:chA-3 osDelay 与 HAL_Delay 的区别 -->
 
 | 函数 | 底层实现 | 使用场景 |
 | ---- | -------- | -------- |
@@ -824,12 +788,10 @@ void StartProcessTask(void *argument)
   在新生成的框架中继续编写业务逻辑
 ```
 
-**图 A-18** 
-<!-- fig:chA-18  -->
-
+**图 A-18** 修改配置的工作流
+<!-- fig:chA-18 修改配置的工作流 -->
 
 ##### 2.5.7.2 用户代码保护机制验证
-
 
 以下场景演示 USER CODE 保护是否生效：
 
@@ -855,15 +817,13 @@ void StartProcessTask(void *argument)
   └──────────────────────────────────────────────────────┘
 ```
 
-**图 A-19** 
-<!-- fig:chA-19  -->
-
+**图 A-19** 用户代码保护机制验证
+<!-- fig:chA-19 用户代码保护机制验证 -->
 
 ##### 2.5.7.3 常见问题与最佳实践
 
-
-**表 A-4** 
-<!-- tab:chA-4  -->
+**表 A-4** 常见问题与最佳实践
+<!-- tab:chA-4 常见问题与最佳实践 -->
 
 | 问题 | 原因 | 解决方法 |
 | ---- | ---- | -------- |
@@ -912,7 +872,7 @@ services:
 
 #### A.5.8 本章在线测试（10 题）
 
-<div id="exam-meta" data-exam-id="chapter2" data-exam-title="第二章 CubeMX编程测验" style="display:none"></div>
+<div id="exam-meta" data-exam-id="chapter2" data-exam-title="第二章 CubeMX 编程测验" style="display:none"></div>
 
 <!-- mkdocs-quiz intro -->
 

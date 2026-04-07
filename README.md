@@ -189,6 +189,24 @@ The plugin is configured in `mkdocs.yml` with:
 
 We welcome contributions from the community to improve the course content and platform features. Please refer to the contribution guidelines on the website. For feedback or support, contact the course coordinator.
 
+### Collaborative Writing Workflow
+
+This course uses a **branch-based collaborative writing** model. Each contributor works on their own branch, then submits a Pull Request (PR) for review before merging into the main branch.
+
+```
+1. Create branch    git checkout -b docs/chapter3-your-name
+2. Write & preview   Edit docs/, then run: mkdocs serve
+3. Commit & push     git add . && git commit && git push origin HEAD
+4. Open PR           Create a Pull Request to main on GitHub
+5. Review            Instructor reviews changes, leaves comments
+6. Revise            Address feedback, push additional commits
+7. Merge             Instructor approves and merges → auto-deploy
+```
+
+**Preview Deployments:** When a PR is opened, [Coolify](https://coolify.io/) automatically builds a preview site for that branch. The instructor can view the rendered result directly in the browser before merging — no need to check out the branch locally.
+
+> For detailed branch naming, commit message, and PR conventions, see the [Contributing Guide](docs/contributing.md).
+
 ---
 
 ## Language Switch

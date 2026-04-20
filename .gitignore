@@ -43,3 +43,5 @@ secrets.yml
 *.sqlite
 *.sqlite3
 .local_exam_data/
+issues.csv
+generate_issues.py

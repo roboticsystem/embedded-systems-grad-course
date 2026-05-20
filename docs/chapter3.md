@@ -455,7 +455,244 @@ void StartDefaultTask(void *argument)
 
 > **本课程建议**：使用 **STM32CubeIDE + CubeMX** 作为主要开发环境，借助图形化工具快速完成外设初始化，将精力集中在控制算法和系统业务逻辑的编写上。
 
----
+#### 3.3.4 STM32CubeMX 代码生成示例
+
+##### 3.3.4.1 学习目标
+
+- 掌握STM32CubeMX图形化配置流程，能够独立完成芯片选型、时钟配置、外设参数设定及工程生成操作。
+
+- 理解CubeMX自动生成工程的整体框架，能够清晰解析生成代码的结构组成与各模块功能。
+
+- 熟练掌握USER CODE BEGIN/END保护机制的核心用法，能够在保护区域内规范编写自定义代码，避免重生成代码时被覆盖。
+
+- 基于STM32+CubeMX+CubeIDE完成完整工程搭建、代码编写、仿真验证，仿真流程完整。
+
+##### 3.3.4.2 核心知识点
+
+- STM32CubeMX图形化配置操作：芯片选型、系统时钟树配置、外设（GPIO、RCC）参数设置、工程输出配置。
+
+- CubeMX自动生成工程框架结构：核心文件（main.c、gpio.c、rcc.c等）组成、初始化函数调用逻辑、代码分层设计。
+
+- USER CODE保护机制：保护区域的标记规则、作用原理、使用规范，以及重生成代码时的代码留存逻辑。
+
+- 生成代码结构解析：系统初始化代码、外设初始化代码、主函数逻辑的具体内容与注释规范。
+
+- CubeMX自动生成代码与手动编写代码的核心差异：开发效率、代码规范性、可维护性、适用场景对比。
+
+##### 3.3.4.3 基本工作原理
+-  CubeMX图形化配置与代码生成原理：
+
+  STM32CubeMX是STMicroelectronics推出的图形化配置工具，内置STM32全系列芯片的硬件资源数据库，可通过可视化界面完成硬件参数配置，无需手动查阅芯片手册配置寄存器。其核心原理是：开发者通过界面设定芯片型号、时钟参数、外设模式等信息后，工具自动解析配置参数，匹配对应的HAL库驱动，生成符合工程规范的初始化代码、目录结构及编译配置文件，实现底层代码的自动化生成，从根源减少手动配置导致的时序错误、时钟异常等问题。
+
+- 自动生成工程框架原理
+
+  CubeMX自动生成的工程采用分层设计，核心框架分为三层，各层功能明确、调用逻辑清晰，具体结构如下：
+
+    - 底层驱动层：由Drivers文件夹中的HAL库文件组成，包含STM32内核及外设的底层驱动，为上层代码提供统一接口。
+
+    - 初始化层：包含SystemClock_Config（系统时钟初始化）、MX_GPIO_Init（GPIO外设初始化）等函数，完成系统及外设的初始化配置，由CubeMX自动生成，不可随意修改。
+
+    - 应用层：主要包含main.c中的主函数逻辑，以及用户在USER CODE保护区域内编写的自定义业务代码，是开发者实现具体功能的核心区域。
+
+- USER CODE BEGIN/END保护机制原理
+
+  为解决工程重配置（修改硬件参数后重新生成代码）时，用户自定义代码被覆盖的问题，CubeMX采用固定注释标记划分代码区域，即USER CODE BEGIN/END保护机制。其核心原理是：
+
+    - 工具在生成代码时，会在关键位置（如主函数、全局变量区、函数定义区）插入固定注释标记，格式为“// USER CODE BEGIN 标识”和“// USER CODE END 标识”，两个标记之间的区域为用户代码保护区域。
+
+    - 当用户修改硬件配置并重新生成代码时，CubeMX仅更新保护区域外部的自动生成代码，保护区域内的用户自定义代码会完整保留，不会被篡改或删除。
+
+    - 保护区域的标识具有唯一性，不同位置的保护区域对应不同的标识（如PV、WHILE、4等），分别对应全局变量区、主循环区、自定义函数区等，便于用户精准定位和编写代码
+
+##### 3.3.4.4 配置与代码生成流程
+
+以下流程图清晰展示STM32CubeMX代码生成流程，呈现各步骤的逻辑关系。
+```plantuml
+@startuml
+title STM32CubeMX 代码生成完整流程
+start
+:启动STM32CubeMX工具;
+:点击"New Project"创建新项目;
+:在芯片选型界面搜索并选定STM32F103C8T6;
+:配置系统时钟树（72MHz）、GPIO等外设参数;
+:点击"Project Manager"，设置工程名称、存储路径;
+:选择编译环境为STM32CubeIDE，勾选"Generate peripheral initialization as a pair of .c/.h files per peripheral";
+:点击"GENERATE CODE"生成工程;
+:打开STM32CubeIDE，导入生成的工程;
+:查看生成代码结构，验证初始化代码完整性;
+:在USER CODE保护区域编写自定义代码;
+end
+@enduml
+```
+##### 3.3.4.5 核心配置与代码结构对照表
+
+下表清晰列出工程核心配置参数及生成代码的关键文件，明确各参数的作用及各文件的功能，为代码结构解析提供依据。
+
+||||
+|-|-|-|
+|配置类别/代码文件|功能说明|具体内容|
+|核心配置参数|确保工程配置标准化，适配CubeIDE开发环境，便于代码调试与移植|主控芯片：STM32F103C8T6；系统时钟：72MHz；调试模式：SW单线调试；编译环境：STM32CubeIDE；代码生成模式：按外设生成.c/.h文件|
+|main.c|工程核心文件，实现初始化调用与自定义业务逻辑|包含主函数、系统初始化函数调用、USER CODE保护区域|
+|gpio.c/rcc.c|底层外设初始化，由CubeMX自动生成，注释详尽|包含GPIO、RCC外设的初始化函数及注释|
+|.ioc文件|保存所有硬件配置参数，可重新编辑并生成代码|CubeMX硬件配置源文件|
+
+##### 3.3.4.6 完整工程示例程序（STM32+CubeMX+CubeIDE）
+
+- 标准工程目录结构
+
+```text
+CubeMX_Code_Example/
+├── Core                  // 核心代码目录
+│   ├── Inc              // 头文件目录
+│   │   ├── main.h       // 主函数头文件
+│   │   ├── gpio.h       // GPIO外设头文件
+│   │   └── rcc.h        // RCC外设头文件
+│   └── Src              // 源文件目录
+│       ├── main.c       // 主函数源文件
+│       ├── gpio.c       // GPIO外设源文件
+│       └── rcc.c        // RCC外设源文件
+├── Drivers              // HAL库驱动目录
+│   ├── STM32F1xx_HAL_Driver  // STM32F1系列HAL库文件
+├── CubeMX_Code_Example.ioc  // CubeMX硬件配置文件
+└── README.md            // 工程说明文档
+```
+
+
+- 核心可运行源码
+
+```C
+/* Includes ------------------------------------------------------------------*/
+#include "main.h"
+#include "gpio.h"
+#include "rcc.h"
+
+/* USER CODE BEGIN PV */
+// 全局变量：用于LED翻转计数，自定义业务变量
+uint32_t led_toggle_cnt = 0;
+/* USER CODE END PV */
+
+/* Private function prototypes -----------------------------------------------*/
+void SystemClock_Config(void);  // 系统时钟初始化函数（CubeMX自动生成）
+static void MX_GPIO_Init(void); // GPIO外设初始化函数（CubeMX自动生成）
+
+/**
+  * @brief  主函数：工程入口，调用初始化函数并执行主循环
+  * @retval int
+  */
+int main(void)
+{
+  /* MCU Configuration--------------------------------------------------------*/
+  // 1. HAL库初始化：初始化定时器、中断等底层资源（CubeMX自动生成）
+  HAL_Init();
+
+  // 2. 系统时钟配置：配置为72MHz，为外设提供时钟（CubeMX自动生成）
+  SystemClock_Config();
+
+  // 3. 外设初始化：初始化GPIO等已配置的外设（CubeMX自动生成）
+  MX_GPIO_Init();
+
+  /* USER CODE BEGIN WHILE */
+  // 主循环：用户自定义业务逻辑区域，重生成代码时不会被覆盖
+  while (1)
+  {
+    // 自定义逻辑：PA0引脚电平翻转，控制LED闪烁（间隔500ms）
+    HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_0);
+    HAL_Delay(500); // 延时500ms
+    led_toggle_cnt++; // 计数累加，用于记录LED翻转次数
+  }
+  /* USER CODE END WHILE */
+
+  /* USER CODE BEGIN 4 */
+  // 自定义函数区域：可编写用户自己的功能函数，重生成代码时保留
+  /**
+    * @brief  LED状态提示函数，用于辅助调试
+    * @param  无
+    * @retval 无
+    */
+  void LED_Status_Prompt(void)
+  {
+    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_0, GPIO_PIN_SET);
+    HAL_Delay(1000);
+    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_0, GPIO_PIN_RESET);
+  }
+  /* USER CODE END 4 */
+}
+
+/**
+  * @brief  System Clock Configuration
+  * @retval None
+  */
+void SystemClock_Config(void)
+{
+  RCC_OscInitTypeDef RCC_OscInitStruct = {0};
+  RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
+
+  // 配置外部高速晶振（HSE），为系统时钟提供基准（CubeMX自动生成）
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
+  RCC_OscInitStruct.HSEState = RCC_HSE_ON;
+  RCC_OscInitStruct.HSEPredivValue = RCC_HSE_PREDIV_DIV1;
+  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
+  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
+  RCC_OscInitStruct.PLL.PLLMUL = RCC_PLL_MUL9;
+  if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  // 配置系统时钟（SYSCLK）、AHB总线时钟、APB总线时钟（CubeMX自动生成）
+  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
+                              |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
+  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
+  RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
+  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV2;
+  RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
+
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+}
+
+/* USER CODE BEGIN 4 */
+// 错误处理函数：当初始化失败时执行，CubeMX自动生成
+void Error_Handler(void)
+{
+  /* USER CODE BEGIN Error_Handler_Debug */
+  /* User can add his own implementation to report the HAL error return state */
+  __disable_irq();
+  while (1)
+  {
+  }
+  /* USER CODE END Error_Handler_Debug */
+}
+#endif
+```
+##### 3.3.4.7 PicSimLab仿真验证
+
+- 启动仿真器（PicSimLab）
+![img.png](img.png)
+
+- 仿真参数确认
+
+    -     仿真主板：加载STM32F103C8T6主板（与工程主控芯片一致）；
+
+    -     调试配置：根据工程内容，选择合适的outputs和配置参数（在spare parts中配置）。
+
+    -     工程加载：确认软件已成功加载目标工程的main.c源码的编译文件，无源码加载失败提示。
+
+- 运行仿真与现象观察（加载编译文件后即开始运行）
+
+    -     初始化状态：上电仿真后，系统自动完成72MHz时钟初始化、GPIO外设初始化，软件界面无任何报错提示；
+
+    -     LED仿真状态：软件内置LED模块（对应工程PA0引脚）按照500ms周期交替闪烁（亮500ms、灭500ms），状态稳定；
+
+    -     变量与串口日志：通过软件调试窗口查看，全局变量led_toggle_cnt持续累加，每500ms增加1，与LED翻转周期一致，串口日志输出正常；
+
+    -     仿真稳定性：整个仿真过程中，程序无卡死、报错、闪退等异常，运行稳定。
+
+> **小结**：STM32CubeMX是一款高效的图形化配置工具，通过可视化操作可一键生成符合HAL库规范的底层初始化代码，其自动生成的工程框架分层清晰，且USER CODE保护机制能有效保留用户自定义代码，避免重生成时被覆盖；结合完整的工程示例与PicSimLab仿真验证（无需真实板卡），可快速完成工程搭建与功能验证，相较于手动编写寄存器代码，其开发效率更高、规范性更强，能为嵌入式工程开发奠定标准化基础
+
+
 
 ### 3.4 第一个嵌入式程序：LED 闪烁
 

@@ -185,7 +185,7 @@ BUTTON1=PA0,pullup,label=User_Button
 
 ### 1.5.4 仿真运行截图
 
-![仿真运行截图](./images/simulation.png)
+![仿真运行截图](/image.png)
 
 ## 1.6 总结
 

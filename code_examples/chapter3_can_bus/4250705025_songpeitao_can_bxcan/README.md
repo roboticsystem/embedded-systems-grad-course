@@ -4,6 +4,8 @@
 
 该示例不是完整 CubeIDE 工程，刻意不提交 CubeMX 自动生成的 HAL/CMSIS 驱动库。使用时将 `.c` 文件复制到 CubeMX 工程的 `Core/Src/`，将 `.h` 文件复制到 `Core/Inc/`，再在 `main.c` 的用户代码区调用即可。
 
+若需要直接导入 STM32CubeIDE 的完整工程，请使用相邻目录 `../4250705025_songpeitao_can_bxcan_project/`。
+
 ## 文件说明
 
 | 文件 | 作用 | 对应验收点 |

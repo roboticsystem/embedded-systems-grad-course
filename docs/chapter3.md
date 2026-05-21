@@ -268,7 +268,7 @@ CubeMX 提供直观的**芯片俯视图（Pin View）**，开发者可在图形�
 
 主要配置项：
 
-**表 3-5** 
+**表 3-5**
 <!-- tab:ch3-5  -->
 
 | 配置项 | 说明 |
@@ -507,7 +507,7 @@ void StartDefaultTask(void *argument)
 
 **各部分职责说明：**
 
-**表 3-7** 
+**表 3-7**
 <!-- tab:ch3-7  -->
 
 | 部分 | 职责 |
@@ -1893,7 +1893,7 @@ STM32 的 GPIO 是**弱驱动**接口，设计用于数字信号控制，不能�
   → 三极管饱和导通（C-E 近似短路）
   → 负载电流从 VCC 经负载、三极管流向 GND（可达数百 mA）
 
-  → GPIO 只需提供几毫安控制电流，实现 小电流控制大电流 
+  → GPIO 只需提供几毫安控制电流，实现 小电流控制大电流
 ```
 
 
@@ -2784,7 +2784,42 @@ CAN 的优势不只是差分抗干扰，还包括多主通信、硬件仲裁、�
 
 本节配套的轻量源码示例位于仓库 `code_examples/chapter3_can_bus/4250705025_songpeitao_can_bxcan/`。该示例面向 STM32F103 bxCAN + CAN 收发器 + AGV 底盘电机节点场景，提供 `can_init_example.c`、`can_user.c`、`can_user.h`、`agv_chassis_demo.c`、`agv_chassis_demo.h` 和集成说明，覆盖 CubeMX 位时序配置、`MX_CAN_Init()` 波特率计算、`CAN_UserStart()` 启动流程、`CAN_SendMotorCommand()` 发送接口、FIFO0 接收回调以及掩码/列表两种滤波器配置方式。
 
-与完整 CubeIDE 工程不同，该示例只保留 CAN 初始化参考、业务层收发代码和 AGV 应用层任务，不提交 CubeMX 自动生成的 HAL/CMSIS 驱动库。实际使用时，可将业务代码复制到 `Core/Src/` 和 `Core/Inc/`，再在 `main.c` 的 `USER CODE BEGIN 2` 区域调用 `CAN_UserStart()`，在 10 ms 定时任务中调用 `AGV_CAN_10msTask()`。
+为了便于直接导入 STM32CubeIDE，本节还提供完整工程目录 `code_examples/chapter3_can_bus/4250705025_songpeitao_can_bxcan_project/`。该工程包含 `SongPeitao_CAN_AGV.ioc`、`.project`、`.cproject`、`Core/`、`Drivers/`、启动文件和链接脚本，可在 STM32CubeIDE 中打开后编译。工程只提交源代码和必要驱动，不提交 `Debug/`、`Release/`、`.o`、`.d`、`.elf`、`.bin`、`.hex` 等编译生成文件。
+
+##### PicSimLab 仿真验证
+
+PicSimLab 验证可以采用两种方式：单板调试阶段使用 CAN LoopBack 模式验证初始化、发送、接收回调和滤波器；联调阶段切回 Normal 模式，通过 USB-CAN 或第二块 STM32 节点观察真实总线报文。下面给出可复现实验步骤。
+
+1. 在 STM32CubeIDE 中导入 `4250705025_songpeitao_can_bxcan_project` 工程。
+2. 打开 `SongPeitao_CAN_AGV.ioc`，确认 `PCLK1 = 36 MHz`、CAN Prescaler = 4、BS1 = 6 TQ、BS2 = 2 TQ、RX0 中断启用。
+3. 若只在 PicSimLab 单板环境验证，可临时把 `Core/Src/can.c` 中 `hcan.Init.Mode` 改为 `CAN_MODE_LOOPBACK`；若连接真实 CAN 收发器或 USB-CAN，保持 `CAN_MODE_NORMAL`。
+4. 编译工程，生成本地调试固件。生成的 `.elf/.bin/.hex` 仅用于本地运行，不提交到 Git。
+5. 启动 PicSimLab，加载 STM32F103 板卡和本地编译固件。命令行方式可写为：
+
+```bash
+picsimlab --board "STM32F103C8T6" --program "Debug/SongPeitao_CAN_AGV.elf"
+```
+
+若使用课程仓库提供的容器环境，可先启动 PicSimLab 容器，再在 VNC 界面中加载本地固件：
+
+```bash
+docker compose -f code_examples/stm32_picsimlab_dev/docker-compose.yml up --build
+```
+
+6. 接线时将 PA12/CAN_TX 接收发器 TXD，PA11/CAN_RX 接收发器 RXD，CAN_H/CAN_L 接到总线；总线两端各接 120 Ω 终端电阻。若为 LoopBack 模式，可不连接外部总线，仅观察软件收发链路。
+7. 运行后观察 10 ms 周期发送的 `0x201~0x204` 电机命令帧，以及 `0x211~0x214` 反馈帧是否进入 FIFO0 并刷新 `g_can_motor_feedback[]`。
+
+![PicSimLab CAN 接线与运行界面](assets/images/chapter3/can-picsimlab-wiring.png)
+
+**图 3-51** PicSimLab CAN 接线与运行界面，展示 STM32F103、CAN 收发器、终端电阻和监测节点的连接关系。
+<!-- fig:ch3-51 PicSimLab CAN 接线与运行界面，展示 STM32F103、CAN 收发器、终端电阻和监测节点的连接关系。 -->
+
+![PicSimLab CAN 运行结果](assets/images/chapter3/can-picsimlab-run-result.png)
+
+**图 3-52** PicSimLab CAN 运行结果，记录初始化参数、发送报文、接收反馈和滤波器验证结果。
+<!-- fig:ch3-52 PicSimLab CAN 运行结果，记录初始化参数、发送报文、接收反馈和滤波器验证结果。 -->
+
+从运行结果看，初始化阶段正确输出 `PCLK1 = 36 MHz`、Prescaler = 4、BS1 = 6 TQ、BS2 = 2 TQ，对应 1 Mbps 波特率；运行阶段周期性发送四路电机命令，并能接收 `0x211~0x214` 反馈帧。若把滤波器改为列表模式，只有四个精确反馈 ID 能进入 FIFO0；若发送 `0x300` 或扩展帧，回调不会更新电机反馈数组，说明硬件滤波和软件二次校验均生效。
 
 ---
 

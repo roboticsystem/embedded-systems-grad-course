@@ -2677,7 +2677,7 @@ void CAN_ConfigMotorRangeFilter(void)
     filter.FilterIdHigh = (0x210 << 5);
     filter.FilterIdLow = 0x0000;
     filter.FilterMaskIdHigh = (0x7F0 << 5);
-    filter.FilterMaskIdLow = 0x0000;
+    filter.FilterMaskIdLow = 0x0006;  /* IDE/RTR 必须为 0 */
     filter.FilterFIFOAssignment = CAN_RX_FIFO0;
     filter.FilterActivation = ENABLE;
     filter.SlaveStartFilterBank = 14;
@@ -2779,6 +2779,12 @@ CAN 的优势不只是差分抗干扰，还包括多主通信、硬件仲裁、�
 | 汽车电子 | SAE J1939 | 250 kbps | 发动机、变速箱、仪表盘通过 CAN 互联 |
 
 工程实现时，CAN 应用层需要同时考虑 ID 规划、发送周期、超时保护和总线负载。对于控制类报文，应优先分配较小 ID；对于诊断和日志类报文，可以分配较大 ID 并降低发送频率，避免影响实时控制链路。
+
+##### 配套源码案例
+
+本节配套的轻量源码示例位于仓库 `code_examples/chapter3_can_bus/4250705025_songpeitao_can_bxcan/`。该示例面向 STM32F103 bxCAN + CAN 收发器 + AGV 底盘电机节点场景，提供 `can_init_example.c`、`can_user.c`、`can_user.h`、`agv_chassis_demo.c`、`agv_chassis_demo.h` 和集成说明，覆盖 CubeMX 位时序配置、`MX_CAN_Init()` 波特率计算、`CAN_UserStart()` 启动流程、`CAN_SendMotorCommand()` 发送接口、FIFO0 接收回调以及掩码/列表两种滤波器配置方式。
+
+与完整 CubeIDE 工程不同，该示例只保留 CAN 初始化参考、业务层收发代码和 AGV 应用层任务，不提交 CubeMX 自动生成的 HAL/CMSIS 驱动库。实际使用时，可将业务代码复制到 `Core/Src/` 和 `Core/Inc/`，再在 `main.c` 的 `USER CODE BEGIN 2` 区域调用 `CAN_UserStart()`，在 10 ms 定时任务中调用 `AGV_CAN_10msTask()`。
 
 ---
 

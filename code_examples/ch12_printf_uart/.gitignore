@@ -1,0 +1,11 @@
+# STM32CubeIDE build outputs — do not commit
+Debug/
+Release/
+*.o
+*.d
+*.elf
+*.bin
+*.hex
+*.map
+*.list
+.settings/

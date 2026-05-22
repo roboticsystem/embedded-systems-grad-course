@@ -132,6 +132,42 @@ HAL_StatusTypeDef CAN_SendMotorCommand(uint8_t motor_id,
     return HAL_CAN_AddTxMessage(&hcan, &tx_header, tx_data, &tx_mailbox);
 }
 
+HAL_StatusTypeDef CAN_SendSimulatedMotorFeedback(uint8_t motor_id,
+                                                 int16_t rpm,
+                                                 int16_t current_ma,
+                                                 uint16_t position)
+{
+    CAN_TxHeaderTypeDef tx_header;
+    uint8_t tx_data[8];
+    uint32_t tx_mailbox;
+
+    if (motor_id == 0U || motor_id > CAN_MOTOR_COUNT) {
+        return HAL_ERROR;
+    }
+
+    if (HAL_CAN_GetTxMailboxesFreeLevel(&hcan) == 0U) {
+        return HAL_BUSY;
+    }
+
+    tx_header.StdId = CAN_MOTOR_FB_BASE_ID + motor_id;
+    tx_header.ExtId = 0U;
+    tx_header.RTR = CAN_RTR_DATA;
+    tx_header.IDE = CAN_ID_STD;
+    tx_header.DLC = 6U;
+    tx_header.TransmitGlobalTime = DISABLE;
+
+    tx_data[0] = (uint8_t)((uint16_t)rpm >> 8);
+    tx_data[1] = (uint8_t)((uint16_t)rpm);
+    tx_data[2] = (uint8_t)((uint16_t)current_ma >> 8);
+    tx_data[3] = (uint8_t)((uint16_t)current_ma);
+    tx_data[4] = (uint8_t)(position >> 8);
+    tx_data[5] = (uint8_t)position;
+    tx_data[6] = 0U;
+    tx_data[7] = 0U;
+
+    return HAL_CAN_AddTxMessage(&hcan, &tx_header, tx_data, &tx_mailbox);
+}
+
 void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *can)
 {
     CAN_RxHeaderTypeDef rx_header;

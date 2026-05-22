@@ -14,6 +14,7 @@ extern "C" {
 #define HAL_GPIO_MODULE_ENABLED
 #define HAL_PWR_MODULE_ENABLED
 #define HAL_RCC_MODULE_ENABLED
+#define HAL_UART_MODULE_ENABLED
 
 #define HSE_VALUE    8000000U
 #define HSE_STARTUP_TIMEOUT 100U
@@ -38,9 +39,13 @@ extern "C" {
 #include "stm32f1xx_hal_flash_ex.h"
 #include "stm32f1xx_hal_exti.h"
 #include "stm32f1xx_hal_pwr.h"
+#include "stm32f1xx_hal_uart.h"
 
 #ifdef  USE_FULL_ASSERT
 void assert_failed(uint8_t *file, uint32_t line);
+#define assert_param(expr) ((expr) ? (void)0U : assert_failed((uint8_t *)__FILE__, __LINE__))
+#else
+#define assert_param(expr) ((void)0U)
 #endif
 
 #ifdef __cplusplus

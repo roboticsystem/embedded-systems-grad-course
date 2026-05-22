@@ -25,6 +25,10 @@ void CAN_ConfigMotorListFilter(void);
 HAL_StatusTypeDef CAN_SendMotorCommand(uint8_t motor_id,
                                        int16_t target_rpm,
                                        uint8_t enable);
+HAL_StatusTypeDef CAN_SendSimulatedMotorFeedback(uint8_t motor_id,
+                                                 int16_t rpm,
+                                                 int16_t current_ma,
+                                                 uint16_t position);
 
 #ifdef __cplusplus
 }

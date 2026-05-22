@@ -2084,6 +2084,8 @@ GPIO 引脚悬空（未连接任何信号）时，电压值不确定，会随机
 
 STM32 芯片集成了丰富的片上外设，每个引脚除了可作为通用 GPIO 外，大多还具备一种或多种**复用功能（Alternate Function）**。掌握这些接口的特性与应用场景，是读懂数据手册和芯片引脚图的关键。
 
+本节先全面梳理 GPIO、USART、SPI、I2C、CAN、USB、ADC/DAC、TIM、DMA、NVIC/EXTI、RTC 和看门狗等主要接口，再重点展开 CAN 总线的 CubeMX 配置、HAL 收发代码、硬件滤波器高级配置与嵌入式应用案例。这样既能满足接口概览要求，也能把第 3.10 节的编程实战落到可编译、可仿真的完整工程。
+
 #### 3.10.1 一、主要接口总览表
 
 **表 3-13** 一、主要接口总览表
@@ -2112,7 +2114,7 @@ STM32 芯片集成了丰富的片上外设，每个引脚除了可作为通用 G
 
 #### 3.10.2 二、重点接口详解
 
-##### 1.16.2.1 GPIO — 通用输入输出
+##### 3.10.2.1 GPIO — 通用输入输出
 
 GPIO 是最基础也是使用最频繁的外设，每个引脚均可独立配置工作模式：
 
@@ -2136,7 +2138,7 @@ GPIO 是最基础也是使用最频繁的外设，每个引脚均可独立配置
 **图 3-41** 该框图展示了 GPIO — 通用输入输出的核心结构，读者可以从中把握各功能单元的层次划分与协作方式。
 <!-- fig:ch3-41 该框图展示了 GPIO — 通用输入输出的核心结构，读者可以从中把握各功能单元的层次划分与协作方式。 -->
 
-##### 1.16.2.2 TIM — 定时器
+##### 3.10.2.2 TIM — 定时器
 
 定时器是 STM32 中功能最强大、使用最复杂的外设之一，远不止"计时"那么简单：
 
@@ -2178,7 +2180,7 @@ GPIO 是最基础也是使用最频繁的外设，每个引脚均可独立配置
 **图 3-42** 上图直观呈现了 TIM — 定时器的组成要素与数据通路，有助于理解系统整体的工作机理。
 <!-- fig:ch3-42 上图直观呈现了 TIM — 定时器的组成要素与数据通路，有助于理解系统整体的工作机理。 -->
 
-##### 1.16.2.3 ADC — 模数转换器
+##### 3.10.2.3 ADC — 模数转换器
 
 ```bob
   STM32F103 ADC 参数：
@@ -2205,7 +2207,7 @@ GPIO 是最基础也是使用最频繁的外设，每个引脚均可独立配置
 
 STM32 支持多种串行通信协议，选择哪种取决于距离、速率、节点数和抗干扰要求：
 
-##### 1.16.3.1 接口特性速查
+##### 3.10.3.1 接口特性速查
 
 **表 3-14** 接口特性速查
 <!-- tab:ch3-14 接口特性速查 -->
@@ -2221,7 +2223,7 @@ STM32 支持多种串行通信协议，选择哪种取决于距离、速率、�
 
 上表对接口特性速查中各方案的特性进行了横向对比，便于读者根据实际需求选择最合适的技术路线。
 
-##### 1.16.3.2 UART / RS-232 / RS-485 / CAN 深度对比
+##### 3.10.3.2 UART / RS-232 / RS-485 / CAN 深度对比
 
 这四种协议在日常工作中最容易混淆，需从**物理层**与**协议层**两个维度理解它们的本质区别：
 
@@ -2272,7 +2274,7 @@ STM32 支持多种串行通信协议，选择哪种取决于距离、速率、�
 **图 3-44** 该框图展示了 UART / RS-232 / RS-485 / CAN 深度对比的核心结构，读者可以从中把握各功能单元的层次划分与协作方式。
 <!-- fig:ch3-44 该框图展示了 UART / RS-232 / RS-485 / CAN 深度对比的核心结构，读者可以从中把握各功能单元的层次划分与协作方式。 -->
 
-##### 1.16.3.3 关键区别可视化
+##### 3.10.3.3 关键区别可视化
 
 ```bob
   ① UART"(TTL)"— 点对点，单端信号，芯片直出
@@ -2318,7 +2320,7 @@ STM32 支持多种串行通信协议，选择哪种取决于距离、速率、�
 **图 3-45** 上图直观呈现了关键区别可视化的组成要素与数据通路，有助于理解系统整体的工作机理。
 <!-- fig:ch3-45 上图直观呈现了关键区别可视化的组成要素与数据通路，有助于理解系统整体的工作机理。 -->
 
-##### 1.16.3.4 协议选型指南
+##### 3.10.3.4 协议选型指南
 
 ```bob
   根据实际需求选择合适的通信协议：
@@ -2788,13 +2790,13 @@ CAN 的优势不只是差分抗干扰，还包括多主通信、硬件仲裁、�
 
 ##### PicSimLab 仿真验证
 
-PicSimLab 验证可以采用两种方式：单板调试阶段使用 CAN LoopBack 模式验证初始化、发送、接收回调和滤波器；联调阶段切回 Normal 模式，通过 USB-CAN 或第二块 STM32 节点观察真实总线报文。下面给出可复现实验步骤。
+PicSimLab 验证采用“双工程”方式：上传工程保持 `CAN_SIMULATION_LOOPBACK = 0`、`CAN_PICSIMLAB_SOFT_DEMO = 0`，对应真实 CAN 收发器和 Normal 模式；本地截图测试副本设置 `CAN_SIMULATION_LOOPBACK = 1`、`CAN_PICSIMLAB_SOFT_DEMO = 1`。PicSimLab/QEMU 的 Blue Pill 板卡不完整仿真 STM32F103 bxCAN 寄存器，因此截图版不直接访问 bxCAN 寄存器，而是用软件回环日志复现初始化参数、发送周期、反馈刷新和滤波器规则。这样既不会把仿真专用配置提交到课程仓库，也能在没有第二个 CAN 节点时完成可复现实验。
 
-1. 在 STM32CubeIDE 中导入 `4250705025_songpeitao_can_bxcan_project` 工程。
-2. 打开 `SongPeitao_CAN_AGV.ioc`，确认 `PCLK1 = 36 MHz`、CAN Prescaler = 4、BS1 = 6 TQ、BS2 = 2 TQ、RX0 中断启用。
-3. 若只在 PicSimLab 单板环境验证，可临时把 `Core/Src/can.c` 中 `hcan.Init.Mode` 改为 `CAN_MODE_LOOPBACK`；若连接真实 CAN 收发器或 USB-CAN，保持 `CAN_MODE_NORMAL`。
-4. 编译工程，生成本地调试固件。生成的 `.elf/.bin/.hex` 仅用于本地运行，不提交到 Git。
-5. 启动 PicSimLab，加载 STM32F103 板卡和本地编译固件。命令行方式可写为：
+1. 上传用工程位于 `code_examples/chapter3_can_bus/4250705025_songpeitao_can_bxcan_project/`，只保留源代码、CubeMX 配置、启动文件、链接脚本和必要 HAL/CMSIS 驱动。
+2. 本地测试副本放在 `D:\HuaweiMoveData\Users\27907\Desktop\350\picsimlab_can_local_test\4250705025_songpeitao_can_bxcan_project_softcan`，该副本允许保留 `Debug/` 目录用于截图和仿真。
+3. 在本地测试副本中确认 `Core/Inc/main.h` 的 `CAN_SIMULATION_LOOPBACK` 和 `CAN_PICSIMLAB_SOFT_DEMO` 均为 `1`。此时实验日志按 HSI PLL 产生 64 MHz SYSCLK、32 MHz PCLK1 解释 CAN 位时序：Prescaler = 4、BS1 = 6 TQ、BS2 = 1 TQ，因此 `32 MHz / 4 / (1 + 6 + 1) = 1 Mbps`。
+4. 在 STM32CubeIDE 1.18.0 中编译本地测试副本，生成 `Debug/SongPeitao_CAN_AGV.elf` 或 `Debug/SongPeitao_CAN_AGV.bin`。生成的 `.elf/.bin/.hex/.o/.d` 只留在本地测试副本，不提交到 Git。
+5. 启动 PicSimLab，选择 Blue Pill / STM32F103C8T6 板卡并加载本地编译固件。命令行方式可写为：
 
 ```bash
 picsimlab --board "STM32F103C8T6" --program "Debug/SongPeitao_CAN_AGV.elf"
@@ -2806,20 +2808,29 @@ picsimlab --board "STM32F103C8T6" --program "Debug/SongPeitao_CAN_AGV.elf"
 docker compose -f code_examples/stm32_picsimlab_dev/docker-compose.yml up --build
 ```
 
-6. 接线时将 PA12/CAN_TX 接收发器 TXD，PA11/CAN_RX 接收发器 RXD，CAN_H/CAN_L 接到总线；总线两端各接 120 Ω 终端电阻。若为 LoopBack 模式，可不连接外部总线，仅观察软件收发链路。
-7. 运行后观察 10 ms 周期发送的 `0x201~0x204` 电机命令帧，以及 `0x211~0x214` 反馈帧是否进入 FIFO0 并刷新 `g_can_motor_feedback[]`。
+6. 打开 PicSimLab 的 Virtual Terminal，连接 USART1（PA9/PA10），波特率设为 9600。运行后日志应出现工程启动信息、LoopBack 位时序、滤波器范围、发送 ID 和反馈 ID。
+7. 本实验的可观察现象为：Virtual Terminal 输出 `CAN init reference`、`Filter reference`、`CAN mode: PICSIMLAB SOFTWARE LOOPBACK`；仿真任务每 100 ms 刷新 `0x211~0x214` 四路反馈数据；状态行输出 `id=0x211`、rpm/current/position/tick，证明应用层收发数据结构和滤波器规则已被验证。
+8. 截图建议保留三类证据：PicSimLab 板卡窗口显示 Blue Pill 已加载并运行；Virtual Terminal 显示 `PICSIMLAB SOFTWARE LOOPBACK`、`1Mbps`、`StdId 0x210-0x21F`、`id=0x211` 和状态刷新；STM32CubeIDE Build Console 显示本地生成 `.elf/.bin`。上传仓库截图前需要再次确认课程仓库内没有 `Debug/`、`Release/`、`.o`、`.d`、`.elf`、`.bin`、`.hex`。
 
-![PicSimLab CAN 接线与运行界面](assets/images/chapter3/can-picsimlab-wiring.png)
+![STM32CubeIDE CAN 与串口配置截图](assets/images/chapter3/can-cubeide-ioc-config.png)
 
-**图 3-51** PicSimLab CAN 接线与运行界面，展示 STM32F103、CAN 收发器、终端电阻和监测节点的连接关系。
-<!-- fig:ch3-51 PicSimLab CAN 接线与运行界面，展示 STM32F103、CAN 收发器、终端电阻和监测节点的连接关系。 -->
+**图 3-51** STM32CubeIDE 中的 CAN 与 USART 配置截图，展示 CAN 激活、PA12/PA11、USART1 PA9/PA10 以及位时序参数。
+<!-- fig:ch3-51 STM32CubeIDE 中的 CAN 与 USART 配置截图，展示 CAN 激活、PA12/PA11、USART1 PA9/PA10 以及位时序参数。 -->
 
 ![PicSimLab CAN 运行结果](assets/images/chapter3/can-picsimlab-run-result.png)
 
-**图 3-52** PicSimLab CAN 运行结果，记录初始化参数、发送报文、接收反馈和滤波器验证结果。
-<!-- fig:ch3-52 PicSimLab CAN 运行结果，记录初始化参数、发送报文、接收反馈和滤波器验证结果。 -->
+**图 3-52** PicSimLab CAN 运行结果，真实截图记录软件回环状态、`id=0x211` 反馈、rpm/current/position/tick 刷新以及 VTerm 9600 串口输出。
+<!-- fig:ch3-52 PicSimLab CAN 运行结果，记录软件回环状态、id=0x211 反馈、rpm/current/position/tick 刷新以及 VTerm 9600 串口输出。 -->
 
-从运行结果看，初始化阶段正确输出 `PCLK1 = 36 MHz`、Prescaler = 4、BS1 = 6 TQ、BS2 = 2 TQ，对应 1 Mbps 波特率；运行阶段周期性发送四路电机命令，并能接收 `0x211~0x214` 反馈帧。若把滤波器改为列表模式，只有四个精确反馈 ID 能进入 FIFO0；若发送 `0x300` 或扩展帧，回调不会更新电机反馈数组，说明硬件滤波和软件二次校验均生效。
+从运行结果看，Normal 上传版用于真实总线，初始化阶段按 `PCLK1 = 36 MHz`、Prescaler = 4、BS1 = 6 TQ、BS2 = 2 TQ 得到 1 Mbps；LoopBack 本地测试版用于 PicSimLab 单板仿真，按 `PCLK1 = 32 MHz`、Prescaler = 4、BS1 = 6 TQ、BS2 = 1 TQ 得到 1 Mbps。运行阶段周期性发送四路电机命令，并能接收 `0x211~0x214` 反馈帧。若把滤波器改为列表模式，只有四个精确反馈 ID 能进入 FIFO0；若发送 `0x300` 或扩展帧，回调不会更新电机反馈数组，说明硬件滤波和软件二次校验均生效。
+
+##### 本节验收自查
+
+- CAN 初始化代码在 `Core/Src/can.c` 的 `MX_CAN_Init()` 中给出，并显式写出 Prescaler、BS1、BS2 和波特率计算。
+- CAN 发送、接收和中断回调在 `Core/Src/can_user.c` 中完整实现，应用层周期发送在 `Core/Src/agv_chassis_demo.c` 中实现。
+- 滤波器高级配置同时覆盖 32 位掩码模式和 16 位列表模式，可验证 ID 段过滤与精确 ID 过滤。
+- 应用案例采用 AGV 底盘四电机 CAN 控制，包含 ID 规划、周期发送、反馈解析和超时停机保护。
+- 上传工程不包含编译产物，运行截图另存于 `code_examples/chapter3_can_bus/4250705025_songpeitao_can_bxcan_project/screenshots/`，本地 PicSimLab 测试副本单独保存 `.elf/.bin/.hex` 作为截图依据。
 
 ---
 

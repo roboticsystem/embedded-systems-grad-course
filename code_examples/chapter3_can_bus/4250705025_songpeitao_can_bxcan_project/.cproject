@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<cproject storage_type_id="org.eclipse.cdt.core.XmlProjectDescriptionStorage">
+	<storageModule moduleId="org.eclipse.cdt.core.settings">
+		<cconfiguration id="com.st.stm32cube.ide.mcu.gnu.managedbuild.config.exe.debug.4250705025">
+			<storageModule buildSystemId="org.eclipse.cdt.managedbuilder.core.configurationDataProvider" id="com.st.stm32cube.ide.mcu.gnu.managedbuild.config.exe.debug.4250705025" moduleId="org.eclipse.cdt.core.settings" name="Debug">
+				<externalSettings/>
+				<extensions>
+					<extension id="org.eclipse.cdt.core.ELF" point="org.eclipse.cdt.core.BinaryParser"/>
+					<extension id="org.eclipse.cdt.core.GNU_ELF" point="org.eclipse.cdt.core.BinaryParser"/>
+				</extensions>
+			</storageModule>
+		</cconfiguration>
+	</storageModule>
+	<storageModule moduleId="cdtBuildSystem" version="4.0.0">
+		<configuration artifactName="${ProjName}" buildProperties="" cleanCommand="rm -rf" description="STM32F103C8T6 bxCAN AGV demo" id="com.st.stm32cube.ide.mcu.gnu.managedbuild.config.exe.debug.4250705025" name="Debug" parent="com.st.stm32cube.ide.mcu.gnu.managedbuild.config.exe.debug">
+			<folderInfo id="com.st.stm32cube.ide.mcu.gnu.managedbuild.config.exe.debug.4250705025." name="/" resourcePath="">
+				<toolChain id="com.st.stm32cube.ide.mcu.gnu.managedbuild.toolchain.exe.debug.4250705025" name="MCU ARM GCC" superClass="com.st.stm32cube.ide.mcu.gnu.managedbuild.toolchain.exe.debug">
+					<option id="com.st.stm32cube.ide.mcu.gnu.managedbuild.option.target_mcu.4250705025" name="MCU" superClass="com.st.stm32cube.ide.mcu.gnu.managedbuild.option.target_mcu" value="STM32F103C8Tx" valueType="string"/>
+					<option id="com.st.stm32cube.ide.mcu.gnu.managedbuild.option.cpu.4250705025" name="CPU" superClass="com.st.stm32cube.ide.mcu.gnu.managedbuild.option.cpu" value="cortex-m3" valueType="string"/>
+					<option id="com.st.stm32cube.ide.mcu.gnu.managedbuild.option.fpu.4250705025" name="FPU" superClass="com.st.stm32cube.ide.mcu.gnu.managedbuild.option.fpu" value="none" valueType="string"/>
+					<option id="com.st.stm32cube.ide.mcu.gnu.managedbuild.option.floatabi.4250705025" name="Float ABI" superClass="com.st.stm32cube.ide.mcu.gnu.managedbuild.option.floatabi" value="soft" valueType="string"/>
+					<targetPlatform id="com.st.stm32cube.ide.mcu.gnu.managedbuild.targetplatform.4250705025" name="Debug platform" superClass="com.st.stm32cube.ide.mcu.gnu.managedbuild.targetplatform"/>
+					<builder buildPath="${workspace_loc:/SongPeitao_CAN_AGV}/Debug" id="com.st.stm32cube.ide.mcu.gnu.managedbuild.builder.4250705025" managedBuildOn="true" name="Gnu Make Builder" superClass="com.st.stm32cube.ide.mcu.gnu.managedbuild.builder"/>
+					<tool id="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.compiler.4250705025" name="MCU GCC Compiler" superClass="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.compiler">
+						<option id="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.compiler.option.definedsymbols.4250705025" name="Defined symbols" superClass="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.compiler.option.definedsymbols" valueType="definedSymbols">
+							<listOptionValue builtIn="false" value="USE_HAL_DRIVER"/>
+							<listOptionValue builtIn="false" value="STM32F103xB"/>
+						</option>
+						<option id="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.compiler.option.includepaths.4250705025" name="Include paths" superClass="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.compiler.option.includepaths" valueType="includePath">
+							<listOptionValue builtIn="false" value="../Core/Inc"/>
+							<listOptionValue builtIn="false" value="../Drivers/STM32F1xx_HAL_Driver/Inc"/>
+							<listOptionValue builtIn="false" value="../Drivers/STM32F1xx_HAL_Driver/Inc/Legacy"/>
+							<listOptionValue builtIn="false" value="../Drivers/CMSIS/Device/ST/STM32F1xx/Include"/>
+							<listOptionValue builtIn="false" value="../Drivers/CMSIS/Include"/>
+						</option>
+						<inputType id="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.compiler.input.4250705025" superClass="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.compiler.input"/>
+					</tool>
+					<tool id="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.cpp.compiler.4250705025" name="MCU G++ Compiler" superClass="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.cpp.compiler"/>
+					<tool id="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.linker.4250705025" name="MCU GCC Linker" superClass="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.linker">
+						<option id="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.linker.option.script.4250705025" name="Linker Script" superClass="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.linker.option.script" value="STM32F103C8TX_FLASH.ld" valueType="string"/>
+					</tool>
+					<tool id="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.assembler.4250705025" name="MCU GCC Assembler" superClass="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.assembler"/>
+				</toolChain>
+			</folderInfo>
+		</configuration>
+	</storageModule>
+	<storageModule moduleId="org.eclipse.cdt.core.LanguageSettingsProviders"/>
+</cproject>

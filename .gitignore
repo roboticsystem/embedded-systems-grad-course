@@ -38,6 +38,19 @@ secrets.yml
 # 日志
 *.log
 
+# STM32CubeIDE / embedded build artifacts
+Debug/
+Release/
+*.o
+*.d
+*.elf
+*.bin
+*.hex
+*.map
+*.list
+*.su
+*.cyclo
+
 # 数据库文件（运行时数据，不提交）
 *.db
 *.sqlite

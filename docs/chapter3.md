@@ -268,7 +268,7 @@ CubeMX 提供直观的**芯片俯视图（Pin View）**，开发者可在图形�
 
 主要配置项：
 
-**表 3-5** 
+**表 3-5**
 <!-- tab:ch3-5  -->
 
 | 配置项 | 说明 |
@@ -507,7 +507,7 @@ void StartDefaultTask(void *argument)
 
 **各部分职责说明：**
 
-**表 3-7** 
+**表 3-7**
 <!-- tab:ch3-7  -->
 
 | 部分 | 职责 |
@@ -1893,7 +1893,7 @@ STM32 的 GPIO 是**弱驱动**接口，设计用于数字信号控制，不能�
   → 三极管饱和导通（C-E 近似短路）
   → 负载电流从 VCC 经负载、三极管流向 GND（可达数百 mA）
 
-  → GPIO 只需提供几毫安控制电流，实现 小电流控制大电流 
+  → GPIO 只需提供几毫安控制电流，实现 小电流控制大电流
 ```
 
 
@@ -2084,6 +2084,8 @@ GPIO 引脚悬空（未连接任何信号）时，电压值不确定，会随机
 
 STM32 芯片集成了丰富的片上外设，每个引脚除了可作为通用 GPIO 外，大多还具备一种或多种**复用功能（Alternate Function）**。掌握这些接口的特性与应用场景，是读懂数据手册和芯片引脚图的关键。
 
+本节先全面梳理 GPIO、USART、SPI、I2C、CAN、USB、ADC/DAC、TIM、DMA、NVIC/EXTI、RTC 和看门狗等主要接口，再重点展开 CAN 总线的 CubeMX 配置、HAL 收发代码、硬件滤波器高级配置与嵌入式应用案例。这样既能满足接口概览要求，也能把第 3.10 节的编程实战落到可编译、可仿真的完整工程。
+
 #### 3.10.1 一、主要接口总览表
 
 **表 3-13** 一、主要接口总览表
@@ -2112,7 +2114,7 @@ STM32 芯片集成了丰富的片上外设，每个引脚除了可作为通用 G
 
 #### 3.10.2 二、重点接口详解
 
-##### 1.16.2.1 GPIO — 通用输入输出
+##### 3.10.2.1 GPIO — 通用输入输出
 
 GPIO 是最基础也是使用最频繁的外设，每个引脚均可独立配置工作模式：
 
@@ -2136,7 +2138,7 @@ GPIO 是最基础也是使用最频繁的外设，每个引脚均可独立配置
 **图 3-41** 该框图展示了 GPIO — 通用输入输出的核心结构，读者可以从中把握各功能单元的层次划分与协作方式。
 <!-- fig:ch3-41 该框图展示了 GPIO — 通用输入输出的核心结构，读者可以从中把握各功能单元的层次划分与协作方式。 -->
 
-##### 1.16.2.2 TIM — 定时器
+##### 3.10.2.2 TIM — 定时器
 
 定时器是 STM32 中功能最强大、使用最复杂的外设之一，远不止"计时"那么简单：
 
@@ -2178,7 +2180,7 @@ GPIO 是最基础也是使用最频繁的外设，每个引脚均可独立配置
 **图 3-42** 上图直观呈现了 TIM — 定时器的组成要素与数据通路，有助于理解系统整体的工作机理。
 <!-- fig:ch3-42 上图直观呈现了 TIM — 定时器的组成要素与数据通路，有助于理解系统整体的工作机理。 -->
 
-##### 1.16.2.3 ADC — 模数转换器
+##### 3.10.2.3 ADC — 模数转换器
 
 ```bob
   STM32F103 ADC 参数：
@@ -2205,7 +2207,7 @@ GPIO 是最基础也是使用最频繁的外设，每个引脚均可独立配置
 
 STM32 支持多种串行通信协议，选择哪种取决于距离、速率、节点数和抗干扰要求：
 
-##### 1.16.3.1 接口特性速查
+##### 3.10.3.1 接口特性速查
 
 **表 3-14** 接口特性速查
 <!-- tab:ch3-14 接口特性速查 -->
@@ -2221,7 +2223,7 @@ STM32 支持多种串行通信协议，选择哪种取决于距离、速率、�
 
 上表对接口特性速查中各方案的特性进行了横向对比，便于读者根据实际需求选择最合适的技术路线。
 
-##### 1.16.3.2 UART / RS-232 / RS-485 / CAN 深度对比
+##### 3.10.3.2 UART / RS-232 / RS-485 / CAN 深度对比
 
 这四种协议在日常工作中最容易混淆，需从**物理层**与**协议层**两个维度理解它们的本质区别：
 
@@ -2272,7 +2274,7 @@ STM32 支持多种串行通信协议，选择哪种取决于距离、速率、�
 **图 3-44** 该框图展示了 UART / RS-232 / RS-485 / CAN 深度对比的核心结构，读者可以从中把握各功能单元的层次划分与协作方式。
 <!-- fig:ch3-44 该框图展示了 UART / RS-232 / RS-485 / CAN 深度对比的核心结构，读者可以从中把握各功能单元的层次划分与协作方式。 -->
 
-##### 1.16.3.3 关键区别可视化
+##### 3.10.3.3 关键区别可视化
 
 ```bob
   ① UART"(TTL)"— 点对点，单端信号，芯片直出
@@ -2318,7 +2320,7 @@ STM32 支持多种串行通信协议，选择哪种取决于距离、速率、�
 **图 3-45** 上图直观呈现了关键区别可视化的组成要素与数据通路，有助于理解系统整体的工作机理。
 <!-- fig:ch3-45 上图直观呈现了关键区别可视化的组成要素与数据通路，有助于理解系统整体的工作机理。 -->
 
-##### 1.16.3.4 协议选型指南
+##### 3.10.3.4 协议选型指南
 
 ```bob
   根据实际需求选择合适的通信协议：
@@ -2409,8 +2411,8 @@ CAN 采用**非破坏性位仲裁**——多个节点同时发送时，ID 最小
 
 **CAN 错误检测机制**（五重保护）：
 
-**表 3-16** 
-<!-- tab:ch3-16  -->
+**表 3-16** CAN 错误检测机制
+<!-- tab:ch3-16 CAN 错误检测机制 -->
 
 | 检测方式 | 原理 |
 |---------|------|
@@ -2478,135 +2480,181 @@ STM32F103 集成 bxCAN 控制器，支持 CAN 2.0A/B，具有 3 个发送邮箱�
 
 ##### CubeMX 配置 CAN
 
-在 STM32CubeMX 中配置 CAN 外设的关键步骤：
+在 STM32CubeMX 中配置 CAN 外设时，需要同时确认时钟、引脚、中断和收发器电路。以 STM32F103C8T6 + TJA1050/MCP2551 收发器为例，关键步骤如下：
 
-1. **启用 CAN**：Connectivity → CAN → Mode: Master Mode
-2. **波特率配置**：
+1. **启用 CAN 外设**：Connectivity → CAN → Mode: Master Mode，工作模式选择 Normal。
+2. **配置位时序**：确认 APB1 外设时钟为 36 MHz，再填写 Prescaler、Time Quanta in Bit Segment 1、Time Quanta in Bit Segment 2 和 SJW。
+3. **分配引脚**：默认 CAN_RX → PA11、CAN_TX → PA12；若板级布线使用 PB8/PB9，需要在 AFIO 中开启 CAN remap。
+4. **启用中断**：NVIC Settings 中勾选 CAN RX0 interrupt，用于 FIFO0 接收中断。
+5. **连接收发器**：CAN_TX 接收发器 TXD，CAN_RX 接收发器 RXD，CAN_H/CAN_L 两端各保留 120 Ω 终端电阻。
 
-   CAN 波特率 = APB1 时钟 / (Prescaler × (BS1 + BS2 + 1))
+CAN 的波特率由 APB1 时钟和一个比特时间内的时间量子数共同决定：
 
-   对于 36MHz APB1 时钟，常用配置：
+```text
+CAN 波特率 = PCLK1 / Prescaler / (1 + BS1 + BS2)
+采样点位置 = (1 + BS1) / (1 + BS1 + BS2)
+```
 
-   | 目标波特率 | Prescaler | BS1 | BS2 | 采样点位置 |
-   |-----------|-----------|-----|-----|-----------|
-   | 1 Mbps | 4 | 6 TQ | 2 TQ | 77.8% |
-   | 500 kbps | 8 | 6 TQ | 2 TQ | 77.8% |
-   | 250 kbps | 16 | 6 TQ | 2 TQ | 77.8% |
-   | 125 kbps | 32 | 6 TQ | 2 TQ | 77.8% |
+其中 `1` 表示同步段 Sync_Seg，`BS1` 和 `BS2` 分别对应 CubeMX 中的 Bit Segment 1 和 Bit Segment 2。对于 `PCLK1 = 36 MHz` 的 STM32F103，常用配置如下。
 
-3. **引脚分配**：CAN_TX → PA12，CAN_RX → PA11（或重映射至 PB9/PB8）
-4. **中断配置**：启用 CAN RX0 中断（接收 FIFO 0）
+**表 3-17** STM32F103 bxCAN 常用位时序配置
+<!-- tab:ch3-17 STM32F103 bxCAN 常用位时序配置 -->
+
+| 目标波特率 | Prescaler | BS1 | BS2 | 计算过程 | 采样点 |
+|-----------|-----------|-----|-----|----------|--------|
+| 1 Mbps | 4 | 6 TQ | 2 TQ | 36 MHz / 4 / 9 | 77.8% |
+| 500 kbps | 8 | 6 TQ | 2 TQ | 36 MHz / 8 / 9 | 77.8% |
+| 250 kbps | 16 | 6 TQ | 2 TQ | 36 MHz / 16 / 9 | 77.8% |
+| 125 kbps | 32 | 6 TQ | 2 TQ | 36 MHz / 32 / 9 | 77.8% |
+
+上表给出的采样点约为 77.8%，适合常见短距离实验板和中等长度工业现场总线。若总线距离较长，应降低波特率并结合示波器检查 CAN_H/CAN_L 边沿质量。
 
 ##### HAL 库 CAN 编程
 
-**初始化与滤波器配置**：
+CubeMX 生成的 CAN 初始化函数通常命名为 `MX_CAN_Init()`。下面的代码保留了 CubeMX/HAL 的典型结构，并把波特率计算直接写入注释，便于检查参数是否与实验要求一致。
 
 ```c
-// can_init.c
+/* can.c */
 #include "main.h"
 
 CAN_HandleTypeDef hcan;
 
-void CAN_Init(void) {
+static void MX_CAN_Init(void)
+{
     hcan.Instance = CAN1;
-    hcan.Init.Prescaler = 4;           // 36MHz / 4 = 9MHz
+
+    /*
+     * PCLK1 = 36 MHz, Prescaler = 4, BS1 = 6 TQ, BS2 = 2 TQ.
+     * CAN bit rate = 36 MHz / 4 / (1 + 6 + 2) = 1 Mbps.
+     */
+    hcan.Init.Prescaler = 4;
     hcan.Init.Mode = CAN_MODE_NORMAL;
     hcan.Init.SyncJumpWidth = CAN_SJW_1TQ;
-    hcan.Init.TimeSeg1 = CAN_BS1_6TQ;  // BS1 = 6
-    hcan.Init.TimeSeg2 = CAN_BS2_2TQ;  // BS2 = 2
-    // 波特率 = 9MHz / (1+6+2) = 1 Mbps
+    hcan.Init.TimeSeg1 = CAN_BS1_6TQ;
+    hcan.Init.TimeSeg2 = CAN_BS2_2TQ;
     hcan.Init.TimeTriggeredMode = DISABLE;
-    hcan.Init.AutoBusOff = ENABLE;    // 自动恢复
+    hcan.Init.AutoBusOff = ENABLE;
     hcan.Init.AutoWakeUp = DISABLE;
-    hcan.Init.AutoRetransmission = ENABLE; // 自动重传
+    hcan.Init.AutoRetransmission = ENABLE;
     hcan.Init.ReceiveFifoLocked = DISABLE;
     hcan.Init.TransmitFifoPriority = DISABLE;
 
     if (HAL_CAN_Init(&hcan) != HAL_OK) {
         Error_Handler();
     }
+}
+```
 
-    // 配置接收滤波器（接收所有报文）
+初始化完成后，还需要配置接收滤波器、启动 CAN 控制器并打开 FIFO0 消息待处理中断。实际工程中可在 `main()` 的 `USER CODE BEGIN 2` 区域调用 `CAN_UserStart()`。
+
+```c
+static void CAN_FilterAcceptAll(void)
+{
     CAN_FilterTypeDef filter;
+
     filter.FilterBank = 0;
     filter.FilterMode = CAN_FILTERMODE_IDMASK;
     filter.FilterScale = CAN_FILTERSCALE_32BIT;
-    filter.FilterIdHigh = 0x0000;      // 不过滤
+    filter.FilterIdHigh = 0x0000;
     filter.FilterIdLow = 0x0000;
-    filter.FilterMaskIdHigh = 0x0000;  // 掩码全0=接收所有
+    filter.FilterMaskIdHigh = 0x0000;
     filter.FilterMaskIdLow = 0x0000;
     filter.FilterFIFOAssignment = CAN_RX_FIFO0;
     filter.FilterActivation = ENABLE;
+    filter.SlaveStartFilterBank = 14;
 
     if (HAL_CAN_ConfigFilter(&hcan, &filter) != HAL_OK) {
         Error_Handler();
     }
+}
 
-    // 启动 CAN 和接收中断
-    HAL_CAN_Start(&hcan);
-    HAL_CAN_ActivateNotification(&hcan,
-        CAN_IT_RX_FIFO0_MSG_PENDING);
+void CAN_UserStart(void)
+{
+    CAN_FilterAcceptAll();
+
+    if (HAL_CAN_Start(&hcan) != HAL_OK) {
+        Error_Handler();
+    }
+
+    if (HAL_CAN_ActivateNotification(&hcan,
+            CAN_IT_RX_FIFO0_MSG_PENDING) != HAL_OK) {
+        Error_Handler();
+    }
 }
 ```
 
 **发送 CAN 报文**：
 
+下面的函数以电机速度控制为例，主控节点向 ID 为 `0x201~0x204` 的电机节点发送目标转速。发送前检查电机编号和发送邮箱，避免把错误参数直接交给底层驱动。
+
 ```c
-// can_tx.c — 发送电机速度指令
-void CAN_SendMotorCommand(uint16_t motor_id,
-                          int16_t target_rpm) {
+HAL_StatusTypeDef CAN_SendMotorCommand(uint8_t motor_id,
+                                       int16_t target_rpm)
+{
     CAN_TxHeaderTypeDef tx_header;
     uint8_t tx_data[4];
     uint32_t tx_mailbox;
 
-    // 设置报文头
-    tx_header.StdId = 0x200 + motor_id; // 标准 ID
+    if (motor_id < 1 || motor_id > 4) {
+        return HAL_ERROR;
+    }
+
+    if (HAL_CAN_GetTxMailboxesFreeLevel(&hcan) == 0) {
+        return HAL_BUSY;
+    }
+
+    tx_header.StdId = 0x200 + motor_id;
     tx_header.ExtId = 0;
-    tx_header.RTR = CAN_RTR_DATA;       // 数据帧
-    tx_header.IDE = CAN_ID_STD;         // 标准帧
-    tx_header.DLC = 4;                  // 4 字节数据
+    tx_header.RTR = CAN_RTR_DATA;
+    tx_header.IDE = CAN_ID_STD;
+    tx_header.DLC = 4;
     tx_header.TransmitGlobalTime = DISABLE;
 
-    // 数据段：目标转速（大端序）
-    tx_data[0] = (target_rpm >> 8) & 0xFF;  // RPM 高字节
-    tx_data[1] = target_rpm & 0xFF;         // RPM 低字节
-    tx_data[2] = 0x01;                      // 使能标志
-    tx_data[3] = 0x00;                      // 保留
+    tx_data[0] = (uint8_t)(target_rpm >> 8);
+    tx_data[1] = (uint8_t)(target_rpm);
+    tx_data[2] = 0x01;
+    tx_data[3] = 0x00;
 
-    // 发送到空闲邮箱
-    if (HAL_CAN_AddTxMessage(&hcan, &tx_header,
-                              tx_data, &tx_mailbox) != HAL_OK) {
-        // 所有邮箱满，处理拥塞
-        Error_Handler();
-    }
+    return HAL_CAN_AddTxMessage(&hcan, &tx_header,
+                                tx_data, &tx_mailbox);
 }
 ```
 
 **接收 CAN 报文（中断模式）**：
 
 ```c
-// can_rx.c — 中断回调接收电机反馈
 typedef struct {
-    int16_t  rpm;        // 实际转速
-    int16_t  current;    // 实际电流 (mA)
-    uint16_t position;   // 编码器位置
+    int16_t  rpm;
+    int16_t  current_ma;
+    uint16_t position;
 } MotorFeedback_t;
 
-volatile MotorFeedback_t motor_fb[4];  // 4 个电机的反馈
+volatile MotorFeedback_t motor_fb[4];
 
-void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan) {
+void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *can)
+{
     CAN_RxHeaderTypeDef rx_header;
     uint8_t rx_data[8];
 
-    HAL_CAN_GetRxMessage(hcan, CAN_RX_FIFO0,
-                          &rx_header, rx_data);
+    if (can->Instance != CAN1) {
+        return;
+    }
 
-    // 根据 ID 解析不同电机的反馈
-    if (rx_header.StdId >= 0x201 && rx_header.StdId <= 0x204) {
-        uint8_t idx = rx_header.StdId - 0x201;
+    if (HAL_CAN_GetRxMessage(can, CAN_RX_FIFO0,
+                             &rx_header, rx_data) != HAL_OK) {
+        return;
+    }
+
+    if (rx_header.IDE == CAN_ID_STD &&
+        rx_header.RTR == CAN_RTR_DATA &&
+        rx_header.DLC >= 6 &&
+        rx_header.StdId >= 0x211 &&
+        rx_header.StdId <= 0x214) {
+        uint8_t idx = rx_header.StdId - 0x211;
+
         motor_fb[idx].rpm =
             (int16_t)((rx_data[0] << 8) | rx_data[1]);
-        motor_fb[idx].current =
+        motor_fb[idx].current_ma =
             (int16_t)((rx_data[2] << 8) | rx_data[3]);
         motor_fb[idx].position =
             (uint16_t)((rx_data[4] << 8) | rx_data[5]);
@@ -2616,42 +2664,72 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan) {
 
 ##### 接收滤波器高级配置
 
-在多节点 CAN 网络中，通过滤波器只接收关心的报文，减轻 CPU 负担：
+在多节点 CAN 网络中，接收滤波器决定哪些报文可以进入 FIFO。滤波器配置越精确，CPU 在中断回调中做无效解析的概率越低。
+
+第一种常用方式是 **32 位掩码模式**。如下配置只接收 `0x210~0x21F` 范围内的标准数据帧，适合按功能段分配 ID 的电机反馈网络。
 
 ```c
-// 滤波器示例：只接收 ID 范围 0x201~0x204 的报文
-void CAN_ConfigMotorFilter(void) {
+void CAN_ConfigMotorRangeFilter(void)
+{
     CAN_FilterTypeDef filter;
-    filter.FilterBank = 1;
-    filter.FilterMode = CAN_FILTERMODE_IDLIST;  // ID 列表模式
-    filter.FilterScale = CAN_FILTERSCALE_16BIT; // 16 位
 
-    // 两个 16 位 ID 列表（每个 Bank 可放 4 个 16 位 ID）
-    filter.FilterIdHigh = 0x201 << 5;      // ID 0x201
-    filter.FilterIdLow = 0x202 << 5;       // ID 0x202
-    filter.FilterMaskIdHigh = 0x203 << 5;  // ID 0x203
-    filter.FilterMaskIdLow = 0x204 << 5;   // ID 0x204
+    filter.FilterBank = 1;
+    filter.FilterMode = CAN_FILTERMODE_IDMASK;
+    filter.FilterScale = CAN_FILTERSCALE_32BIT;
+    filter.FilterIdHigh = (0x210 << 5);
+    filter.FilterIdLow = 0x0000;
+    filter.FilterMaskIdHigh = (0x7F0 << 5);
+    filter.FilterMaskIdLow = 0x0006;  /* IDE/RTR 必须为 0 */
+    filter.FilterFIFOAssignment = CAN_RX_FIFO0;
+    filter.FilterActivation = ENABLE;
+    filter.SlaveStartFilterBank = 14;
+
+    if (HAL_CAN_ConfigFilter(&hcan, &filter) != HAL_OK) {
+        Error_Handler();
+    }
+}
+```
+
+第二种方式是 **16 位列表模式**。如下配置只接收 `0x211~0x214` 四个精确 ID，适合电机反馈、传感器上报等 ID 固定的场景。
+
+```c
+void CAN_ConfigMotorListFilter(void)
+{
+    CAN_FilterTypeDef filter;
+
+    filter.FilterBank = 2;
+    filter.FilterMode = CAN_FILTERMODE_IDLIST;
+    filter.FilterScale = CAN_FILTERSCALE_16BIT;
+    filter.FilterIdHigh = (0x211 << 5);
+    filter.FilterIdLow = (0x212 << 5);
+    filter.FilterMaskIdHigh = (0x213 << 5);
+    filter.FilterMaskIdLow = (0x214 << 5);
 
     filter.FilterFIFOAssignment = CAN_RX_FIFO0;
     filter.FilterActivation = ENABLE;
+    filter.SlaveStartFilterBank = 14;
 
-    HAL_CAN_ConfigFilter(&hcan, &filter);
+    if (HAL_CAN_ConfigFilter(&hcan, &filter) != HAL_OK) {
+        Error_Handler();
+    }
 }
 ```
 
 **滤波器模式对比**：
 
-**表 3-17** 接收滤波器高级配置
-<!-- tab:ch3-17 接收滤波器高级配置 -->
+**表 3-18** 接收滤波器高级配置
+<!-- tab:ch3-18 接收滤波器高级配置 -->
 
 | 模式 | 原理 | 适用场景 |
 |------|------|---------|
-| **掩码模式**（IDMASK） | ID & Mask == FilterID & Mask | 接收一个 ID 范围（如 0x200~0x20F） |
+| **掩码模式**（IDMASK） | ID & Mask == FilterID & Mask | 接收一个 ID 范围（如 0x210~0x21F） |
 | **列表模式**（IDLIST） | ID == FilterID1 或 ID == FilterID2 | 只接收指定的几个 ID |
 
-通过上表的对比可以看出，不同方案在模式、原理、适用场景等方面各有优劣，实际选型时应结合具体应用场景综合权衡。
+掩码模式适合按 ID 段过滤，列表模式适合精确匹配少量固定 ID。若一个节点既要接收电机反馈又要接收 IMU 数据，可以把电机反馈放入 FIFO0，把 IMU 或诊断报文放入 FIFO1，分别使用不同的回调和解析逻辑。
 
 ##### CAN 总线在嵌入式系统中的应用
+
+CAN 的优势不只是差分抗干扰，还包括多主通信、硬件仲裁、错误隔离和较低的软件协议开销。下面以 AGV 底盘控制为例说明一条完整的数据链路：主控 STM32 每 10 ms 发送四个电机的目标转速，电机驱动器执行闭环控制后回传实际转速、电流和编码器位置。
 
 ```bob
 ┌─────────────────────────────────────────────────────────┐
@@ -2669,7 +2747,7 @@ void CAN_ConfigMotorFilter(void) {
 │                                                         │
 │  通信协议示例:                                           │
 │  主控 → 电机: ID=0x200+n, DLC=4, [RPM_H,RPM_L,EN,0]   │
-│  电机 → 主控: ID=0x200+n, DLC=6, [RPM,Current,Pos]     │
+│  电机 → 主控: ID=0x210+n, DLC=6, [RPM,Current,Pos]     │
 │  IMU → 主控: ID=0x300, DLC=8, [GyroXYZ, AccelXYZ]     │
 └─────────────────────────────────────────────────────────┘
 ```
@@ -2678,10 +2756,22 @@ void CAN_ConfigMotorFilter(void) {
 **图 3-50** 该框图展示了 CAN 总线在嵌入式系统中的应用的核心结构，读者可以从中把握各功能单元的层次划分与协作方式。
 <!-- fig:ch3-50 该框图展示了 CAN 总线在嵌入式系统中的应用的核心结构，读者可以从中把握各功能单元的层次划分与协作方式。 -->
 
+在该案例中，主控节点的发送报文与接收报文可以按下表组织。命令 ID 与反馈 ID 分段设计，便于用前文的 `CAN_ConfigMotorRangeFilter()` 做硬件过滤。
+
+**表 3-19** AGV 底盘 CAN 报文设计示例
+<!-- tab:ch3-19 AGV 底盘 CAN 报文设计示例 -->
+
+| 方向 | CAN ID | DLC | 数据定义 | 周期 |
+|------|--------|-----|----------|------|
+| 主控 → 电机 | 0x201~0x204 | 4 | `target_rpm[15:0]`、enable、reserved | 10 ms |
+| 电机 → 主控 | 0x211~0x214 | 6 | `rpm[15:0]`、current、position | 10 ms |
+| IMU → 主控 | 0x300 | 8 | yaw、gyro_z、acc_x、acc_y | 20 ms |
+| 主控 → 全节点 | 0x100 | 1 | 急停或使能广播命令 | 事件触发 |
+
 **CAN 在嵌入式领域的典型应用**：
 
-**表 3-18** 
-<!-- tab:ch3-18  -->
+**表 3-20** CAN 在嵌入式系统中的典型应用
+<!-- tab:ch3-20 CAN 在嵌入式系统中的典型应用 -->
 
 | 应用场景 | CAN ID 分配策略 | 波特率 | 说明 |
 |---------|----------------|--------|------|
@@ -2690,13 +2780,65 @@ void CAN_ConfigMotorFilter(void) {
 | 电机驱动系统 | C620 电调协议 | 1 Mbps | 大疆 C620 电调使用 CAN 接收电流指令和反馈转速 |
 | 汽车电子 | SAE J1939 | 250 kbps | 发动机、变速箱、仪表盘通过 CAN 互联 |
 
+工程实现时，CAN 应用层需要同时考虑 ID 规划、发送周期、超时保护和总线负载。对于控制类报文，应优先分配较小 ID；对于诊断和日志类报文，可以分配较大 ID 并降低发送频率，避免影响实时控制链路。
+
+##### 配套源码案例
+
+本节配套的轻量源码示例位于仓库 `code_examples/chapter3_can_bus/4250705025_songpeitao_can_bxcan/`。该示例面向 STM32F103 bxCAN + CAN 收发器 + AGV 底盘电机节点场景，提供 `can_init_example.c`、`can_user.c`、`can_user.h`、`agv_chassis_demo.c`、`agv_chassis_demo.h` 和集成说明，覆盖 CubeMX 位时序配置、`MX_CAN_Init()` 波特率计算、`CAN_UserStart()` 启动流程、`CAN_SendMotorCommand()` 发送接口、FIFO0 接收回调以及掩码/列表两种滤波器配置方式。
+
+为了便于直接导入 STM32CubeIDE，本节还提供完整工程目录 `code_examples/chapter3_can_bus/4250705025_songpeitao_can_bxcan_project/`。该工程包含 `SongPeitao_CAN_AGV.ioc`、`.project`、`.cproject`、`Core/`、`Drivers/`、启动文件和链接脚本，可在 STM32CubeIDE 中打开后编译。工程只提交源代码和必要驱动，不提交 `Debug/`、`Release/`、`.o`、`.d`、`.elf`、`.bin`、`.hex` 等编译生成文件。
+
+##### PicSimLab 仿真验证
+
+PicSimLab 验证采用“双工程”方式：上传工程保持 `CAN_SIMULATION_LOOPBACK = 0`、`CAN_PICSIMLAB_SOFT_DEMO = 0`，对应真实 CAN 收发器和 Normal 模式；本地截图测试副本设置 `CAN_SIMULATION_LOOPBACK = 1`、`CAN_PICSIMLAB_SOFT_DEMO = 1`。PicSimLab/QEMU 的 Blue Pill 板卡不完整仿真 STM32F103 bxCAN 寄存器，因此截图版不直接访问 bxCAN 寄存器，而是用软件回环日志复现初始化参数、发送周期、反馈刷新和滤波器规则。这样既不会把仿真专用配置提交到课程仓库，也能在没有第二个 CAN 节点时完成可复现实验。
+
+1. 上传用工程位于 `code_examples/chapter3_can_bus/4250705025_songpeitao_can_bxcan_project/`，只保留源代码、CubeMX 配置、启动文件、链接脚本和必要 HAL/CMSIS 驱动。
+2. 本地测试副本放在 `D:\HuaweiMoveData\Users\27907\Desktop\350\picsimlab_can_local_test\4250705025_songpeitao_can_bxcan_project_softcan`，该副本允许保留 `Debug/` 目录用于截图和仿真。
+3. 在本地测试副本中确认 `Core/Inc/main.h` 的 `CAN_SIMULATION_LOOPBACK` 和 `CAN_PICSIMLAB_SOFT_DEMO` 均为 `1`。此时实验日志按 HSI PLL 产生 64 MHz SYSCLK、32 MHz PCLK1 解释 CAN 位时序：Prescaler = 4、BS1 = 6 TQ、BS2 = 1 TQ，因此 `32 MHz / 4 / (1 + 6 + 1) = 1 Mbps`。
+4. 在 STM32CubeIDE 1.18.0 中编译本地测试副本，生成 `Debug/SongPeitao_CAN_AGV.elf` 或 `Debug/SongPeitao_CAN_AGV.bin`。生成的 `.elf/.bin/.hex/.o/.d` 只留在本地测试副本，不提交到 Git。
+5. 启动 PicSimLab，选择 Blue Pill / STM32F103C8T6 板卡并加载本地编译固件。命令行方式可写为：
+
+```bash
+picsimlab --board "STM32F103C8T6" --program "Debug/SongPeitao_CAN_AGV.elf"
+```
+
+若使用课程仓库提供的容器环境，可先启动 PicSimLab 容器，再在 VNC 界面中加载本地固件：
+
+```bash
+docker compose -f code_examples/stm32_picsimlab_dev/docker-compose.yml up --build
+```
+
+6. 打开 PicSimLab 的 Virtual Terminal，连接 USART1（PA9/PA10），波特率设为 9600。运行后日志应出现工程启动信息、LoopBack 位时序、滤波器范围、发送 ID 和反馈 ID。
+7. 本实验的可观察现象为：Virtual Terminal 输出 `CAN init reference`、`Filter reference`、`CAN mode: PICSIMLAB SOFTWARE LOOPBACK`；仿真任务每 100 ms 刷新 `0x211~0x214` 四路反馈数据；状态行输出 `id=0x211`、rpm/current/position/tick，证明应用层收发数据结构和滤波器规则已被验证。
+8. 截图建议保留三类证据：PicSimLab 板卡窗口显示 Blue Pill 已加载并运行；Virtual Terminal 显示 `PICSIMLAB SOFTWARE LOOPBACK`、`1Mbps`、`StdId 0x210-0x21F`、`id=0x211` 和状态刷新；STM32CubeIDE Build Console 显示本地生成 `.elf/.bin`。上传仓库截图前需要再次确认课程仓库内没有 `Debug/`、`Release/`、`.o`、`.d`、`.elf`、`.bin`、`.hex`。
+
+![STM32CubeIDE CAN 与串口配置截图](assets/images/chapter3/can-cubeide-ioc-config.png)
+
+**图 3-51** STM32CubeIDE 中的 CAN 与 USART 配置截图，展示 CAN 激活、PA12/PA11、USART1 PA9/PA10 以及位时序参数。
+<!-- fig:ch3-51 STM32CubeIDE 中的 CAN 与 USART 配置截图，展示 CAN 激活、PA12/PA11、USART1 PA9/PA10 以及位时序参数。 -->
+
+![PicSimLab CAN 运行结果](assets/images/chapter3/can-picsimlab-run-result.png)
+
+**图 3-52** PicSimLab CAN 运行结果，真实截图记录软件回环状态、`id=0x211` 反馈、rpm/current/position/tick 刷新以及 VTerm 9600 串口输出。
+<!-- fig:ch3-52 PicSimLab CAN 运行结果，记录软件回环状态、id=0x211 反馈、rpm/current/position/tick 刷新以及 VTerm 9600 串口输出。 -->
+
+从运行结果看，Normal 上传版用于真实总线，初始化阶段按 `PCLK1 = 36 MHz`、Prescaler = 4、BS1 = 6 TQ、BS2 = 2 TQ 得到 1 Mbps；LoopBack 本地测试版用于 PicSimLab 单板仿真，按 `PCLK1 = 32 MHz`、Prescaler = 4、BS1 = 6 TQ、BS2 = 1 TQ 得到 1 Mbps。运行阶段周期性发送四路电机命令，并能接收 `0x211~0x214` 反馈帧。若把滤波器改为列表模式，只有四个精确反馈 ID 能进入 FIFO0；若发送 `0x300` 或扩展帧，回调不会更新电机反馈数组，说明硬件滤波和软件二次校验均生效。
+
+##### 本节验收自查
+
+- CAN 初始化代码在 `Core/Src/can.c` 的 `MX_CAN_Init()` 中给出，并显式写出 Prescaler、BS1、BS2 和波特率计算。
+- CAN 发送、接收和中断回调在 `Core/Src/can_user.c` 中完整实现，应用层周期发送在 `Core/Src/agv_chassis_demo.c` 中实现。
+- 滤波器高级配置同时覆盖 32 位掩码模式和 16 位列表模式，可验证 ID 段过滤与精确 ID 过滤。
+- 应用案例采用 AGV 底盘四电机 CAN 控制，包含 ID 规划、周期发送、反馈解析和超时停机保护。
+- 上传工程不包含编译产物，运行截图另存于 `code_examples/chapter3_can_bus/4250705025_songpeitao_can_bxcan_project/screenshots/`，本地 PicSimLab 测试副本单独保存 `.elf/.bin/.hex` 作为截图依据。
+
 ---
 
 ### 3.11 本章小结
 
 
-**表 3-19** 本章系统介绍了 STM32 微控制器开发的核心基础：
-<!-- tab:ch3-19 本章系统介绍了 STM32 微控制器开发的核心基础： -->
+**表 3-21** 本章系统介绍了 STM32 微控制器开发的核心基础：
+<!-- tab:ch3-21 本章系统介绍了 STM32 微控制器开发的核心基础： -->
 
 | 主题 | 关键内容 |
 |------|---------|

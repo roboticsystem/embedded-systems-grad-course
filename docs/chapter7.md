@@ -364,20 +364,381 @@ float ADC_GetChannel(uint8_t ch)
 
 ### 7.6 红外传感器
 
-红外避障传感器以数字电平输出为主，常用于障碍物检测。
+红外传感器利用红外线的反射特性检测物体是否存在或测量物体距离，是嵌入式系统中最常用的低成本检测方案之一。本节介绍数字输出型和模拟输出型两类红外传感器的接口编程方法。
 
-- **数字输出型**（如 TCRT5000）：检测到障碍物时输出低电平，否则高电平
-- **模拟输出型**（如 GP2Y0A21）：输出与距离成反比的模拟电压
+#### 7.6.1 学习目标
+
+完成本节学习后，你应当能够：
+
+- 理解红外传感器的工作原理和分类
+- 掌握数字输出型红外传感器的 GPIO 接口编程
+- 掌握模拟输出型红外传感器的 ADC 采样与距离计算
+- 能够在 PicSimlab 中搭建红外传感器仿真电路
+
+#### 7.6.2 工作原理
+
+红外传感器由红外发射管和红外接收管组成，通过检测发射光经物体反射后的强度来判断物体是否存在或距离远近。
+
+```bob
+      ┌──────────────────────────────────────────────────────────────┐
+      │                       红外传感器工作原理                      │
+      ├──────────────────────────────────────────────────────────────┤
+      │                                                              │
+      │    发射管        目标物体        接收管        输出信号      │
+      │    ┌───┐         ┌───┐         ┌───┐         ┌──────┐      │
+      │    │IR │  ~~~~>  │   │  <~~~~~ │RT │    ────>│ 高/低 │      │
+      │    │发射│         │物体│         │接收│         │ 电平  │      │
+      │    └───┘         └───┘         └───┘         └──────┘      │
+      │      │                              │                              │
+      │      └────────── 反射光 ────────────┘              │
+      │                                                              │
+      │    无物体：反射弱 → 输出低电平（数字型）/ 低电压（模拟型）    │
+      │    有物体：反射强 → 输出高电平（数字型）/ 高电压（模拟型）    │
+      └──────────────────────────────────────────────────────────────┘
+```
+
+**图 7-6** 红外传感器工作原理示意图。
+<!-- fig:ch7-6 红外传感器工作原理示意图。 -->
+
+根据输出信号类型，红外传感器可分为两类：
+
+**表 7-2** 红外传感器分类与特点
+<!-- tab:ch7-2 红外传感器分类与特点 -->
+
+| 类型 | 工作原理 | 输出信号 | STM32 接口 | 典型型号 | 检测距离 |
+|------|---------|---------|-----------|---------|---------|
+| 数字输出型 | 反射光强度阈值比较 | 高/低电平 | GPIO 输入 | TCRT5000 | ~10 mm |
+| 模拟输出型 | 反射光强度线性转换 | 0~3.3V 模拟电压 | ADC 采样 | GP2Y0A21 | 10~80 cm |
+
+数字输出型传感器内部集成了电压比较器，当反射光强超过阈值时输出状态翻转，适合简单的有/无检测。模拟输出型则输出与距离成反比的连续电压信号，可实现距离估算。
+
+---
+
+#### 7.6.3 数字输出型红外传感器（TCRT5000）
+
+TCRT5000 是最常见的数字输出型红外传感器，由红外发射管、光敏接收管和比较器电路组成，检测距离约 1~10 mm。
+
+**CubeMX 配置步骤：**
+
+1. 打开 CubeMX，选择 STM32F103C8Tx 芯片
+2. 在引脚配置图中找到 PB0，将其配置为 `GPIO_Input`
+3. 在 GPIO 模式设置中，勾选 `GPIO Pull-up`（上拉模式）
+4. 可选：配置外部中断 - 在 PB0 的 GPIO EXTI 模式中设置为上升沿/下降沿触发
+5. 点击 `Generate Code` 生成工程代码
+
+![CubeMX GPIO 配置](assets/ch7/cubemx-gpio-input.png){ width="80%" }
+
+**图 7-8** CubeMX 配置 PB0 为 GPIO 输入模式（上拉）。
+<!-- fig:ch7-8 CubeMX 配置 PB0 为 GPIO 输入模式（上拉）。 -->
+
+**连接示意图：**
+
+```bob
+     STM32F103                  TCRT5000
+  ┌────────────┐            ┌──────────────┐
+  │            │            │   ┌──────┐   │
+  │    3.3V    ├────────────►│ VCC│      │   │
+  │            │            │   │  IR  │   │
+  │    PB0     ├────────────►│OUT│      │   │
+  │  (GPIO_IN) │            │   │ 模块 │   │
+  │            │            │   │      │   │
+  │    GND     ├────────────►│GND│      │   │
+  │            │            │   └──────┘   │
+  └────────────┘            └──────────────┘
+```
+
+**图 7-7** TCRT5000 与 STM32 的连接示意图。
+<!-- fig:ch7-7 TCRT5000 与 STM32 的连接示意图。 -->
+
+**STM32 驱动代码：**
 
 ```c
-/* 红外避障传感器 — GPIO 数字读取 */
-uint8_t IR_IsObstacle(void)
+/* 数字输出型红外传感器驱动 */
+#include "main.h"
+
+#define IR_OUT_PORT  GPIOB
+#define IR_OUT_PIN   GPIO_PIN_0
+
+/**
+ * @brief 初始化红外传感器引脚
+ * @note  在 CubeMX 中配置为输入模式 + 上拉
+ */
+void IR_Digital_Init(void)
 {
-    return (HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_1) == GPIO_PIN_RESET) ? 1 : 0;
+    /* CubeMX 已完成 GPIO 配置，此处仅作说明 */
+}
+
+/**
+ * @brief 检测是否有障碍物
+ * @retval 1 表示检测到障碍物，0 表示无障碍物
+ * @note  TCRT5000 检测到物体时输出低电平
+ */
+uint8_t IR_Digital_IsObstacle(void)
+{
+    return (HAL_GPIO_ReadPin(IR_OUT_PORT, IR_OUT_PIN) == GPIO_PIN_RESET) ? 1 : 0;
+}
+
+/**
+ * @brief 红外传感器轮询检测示例
+ */
+void IR_Digital_PollingExample(void)
+{
+    if (IR_Digital_IsObstacle()) {
+        /* 检测到障碍物，执行相应动作 */
+        HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_SET);  /* 点亮 LED */
+    } else {
+        /* 无障碍物 */
+        HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_RESET);  /* 熄灭 LED */
+    }
 }
 ```
 
-在农业信息化应用中，红外传感器可用于农产品计数、传送带物体检测等场景。
+**中断模式实现（可选）：**
+
+当需要实时响应障碍物时，可配置 GPIO 外部中断：
+
+```c
+/* 外部中断回调函数 */
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+{
+    if (GPIO_Pin == IR_OUT_PIN) {
+        if (IR_Digital_IsObstacle()) {
+            /* 障碍物进入检测区 */
+        } else {
+            /* 障碍物离开检测区 */
+        }
+    }
+}
+```
+
+---
+
+#### 7.6.4 模拟输出型红外传感器（GP2Y0A21）
+
+GP2Y0A21 是夏普公司生产的模拟输出型红外距离传感器，输出电压与距离成非线性反比关系，检测范围 10~80 cm。
+
+**CubeMX 配置步骤：**
+
+1. 打开 CubeMX，选择 STM32F103C8Tx 芯片
+2. 在引脚配置图中找到 PA0，将其配置为 `ADC1_IN0`
+3. 在 ADC1 配置中：
+   - 设置 Clock Prescaler 为 `PCLK2 div 4`
+   - 设置 Resolution 为 `12 Bits`
+   - 设置 Data Alignment 为 `Right alignment`
+   - 在 ADC_Regular_ConversionMode 中设置 Continuous Conversion Mode 为 `Enable`
+   - 设置 Sampling Time 为 `239.5 Cycles`
+4. 点击 `Generate Code` 生成工程代码
+
+![CubeMX ADC 配置](assets/ch7/cubemx-adc-config.png){ width="80%" }
+
+**图 7-9** CubeMX 配置 PA0 为 ADC1_IN0 及参数设置。
+<!-- fig:ch7-9 CubeMX 配置 PA0 为 ADC1_IN0 及参数设置。 -->
+
+**距离-电压特性：**
+
+GP2Y0A21 的输出电压与距离呈非线性关系，近似公式为：
+
+$$d = \frac{27.86}{V_{out} - 0.42} \text{ (cm)}$$
+
+其中 $V_{out}$ 为传感器输出电压（V），有效测量范围约为 10~80 cm。
+
+**STM32 驱动代码：**
+
+```c
+/* 模拟输出型红外传感器驱动 */
+#include "main.h"
+
+#define IR_ADC_CHANNEL  0
+
+/**
+ * @brief 读取红外传感器 ADC 值
+ * @retval ADC 转换值（0~4095）
+ */
+uint16_t IR_Analog_ReadRaw(void)
+{
+    HAL_ADC_Start(&hadc1);
+    HAL_ADC_PollForConversion(&hadc1, 10);
+    uint16_t adc_value = HAL_ADC_GetValue(&hadc1);
+    HAL_ADC_Stop(&hadc1);
+    return adc_value;
+}
+
+/**
+ * @brief 读取红外传感器输出电压
+ * @retval 电压值（V）
+ */
+float IR_Analog_ReadVoltage(void)
+{
+    uint16_t adc_value = IR_Analog_ReadRaw();
+    return (float)adc_value / 4095.0f * 3.3f;
+}
+
+/**
+ * @brief 计算距离
+ * @retval 距离值（cm），超出测量范围返回 -1
+ * @note  使用经验公式：d = 27.86 / (Vout - 0.42)
+ */
+float IR_Analog_GetDistance(void)
+{
+    float voltage = IR_Analog_ReadVoltage();
+
+    /* 检查电压是否在有效范围内 */
+    if (voltage < 0.5f || voltage > 2.7f) {
+        return -1.0f;  /* 超出测量范围 */
+    }
+
+    /* 经验公式计算距离 */
+    float distance = 27.86f / (voltage - 0.42f);
+
+    /* 限制在有效测量范围内 */
+    if (distance < 10.0f) distance = 10.0f;
+    if (distance > 80.0f) distance = 80.0f;
+
+    return distance;
+}
+```
+
+**距离测量示例：**
+
+```c
+/* 距离测量与阈值判断 */
+void IR_Analog_DistanceExample(void)
+{
+    float distance = IR_Analog_GetDistance();
+
+    if (distance < 0) {
+        /* 超出测量范围 */
+    } else if (distance < 30.0f) {
+        /* 距离小于 30cm，近距离告警 */
+    } else {
+        /* 正常距离范围 */
+    }
+}
+```
+
+---
+
+#### 7.6.5 PicSimlab 仿真实验
+
+PicSimlab 提供了虚拟红外传感器组件，可方便地进行接口编程验证。
+
+**实验步骤：**
+
+1. **启动 PicSimlab 并选择开发板**
+
+   ![PicSimlab 启动界面](assets/ch7/picsimlab-start.png){ width="80%" }
+
+   **图 7-10** PicSimlab 主界面，选择 STM32F103C8T6（Blue Pill）开发板。
+   <!-- fig:ch7-10 PicSimlab 主界面，选择 STM32F103C8T6（Blue Pill）开发板。 -->
+
+2. **配置虚拟传感器组件**
+
+   在 PicSimlab 中添加以下组件（通过 Pinout Configuration 配置引脚映射）：
+
+   - **Push Buttons**（Discrete 分类）→ 映射到 **PB0**，模拟数字红外传感器
+   - **Potentiometers**（Discrete 分类）→ 映射到 **PA0**，模拟模拟红外传感器
+   - **LED**（Discrete 分类）→ 映射到 **PA5**，状态指示
+
+   ![PicSimlab 组件配置](assets/ch7/picsimlab-ir-config.png){ width="80%" }
+
+   **图 7-11** PicSimlab 组件引脚映射配置界面。
+   <!-- fig:ch7-11 PicSimlab 组件引脚映射配置界面。 -->
+
+3. **加载固件并运行**
+
+   - 点击 `Load Hex` 按钮，选择编译生成的 .hex 文件
+   - 点击运行按钮（绿色三角形）
+
+4. **观察现象**
+
+   ![PicSimlab 运行效果](assets/ch7/picsimlab-result.png){ width="80%" }
+
+   **图 7-12** 仿真运行效果，按下 Push Button 时 LED 点亮。
+   <!-- fig:ch7-12 仿真运行效果，按下 Push Button 时 LED 点亮。 -->
+
+**预期结果：**
+
+- **数字型**：当障碍物进入检测范围时，LED 状态翻转
+- **模拟型**：ADC 采样值随距离增加而减小
+
+---
+
+#### 7.6.6 应用场景举例
+
+红外传感器在农业信息化和工业自动化中有广泛应用。
+
+**农产品计数：**
+
+在农产品分拣传送带上，利用红外传感器检测通过的产品数量。
+
+```c
+/* 农产品计数示例 */
+static volatile uint32_t product_count = 0;
+
+void Product_CountingTask(void)
+{
+    static uint8_t last_state = 0;
+    uint8_t current_state = IR_Digital_IsObstacle();
+
+    /* 下降沿计数（物体进入检测区） */
+    if (last_state == 0 && current_state == 1) {
+        product_count++;
+    }
+    last_state = current_state;
+}
+```
+
+**传送带物体检测：**
+
+检测传送带上是否有物体存在，用于自动启停控制。
+
+```c
+/* 传送带控制示例 */
+void Conveyor_ControlTask(void)
+{
+    if (IR_Digital_IsObstacle()) {
+        /* 有物体，启动传送带 */
+        Motor_Start();
+    } else {
+        /* 无物体，停止传送带 */
+        Motor_Stop();
+    }
+}
+```
+
+**液位监测：**
+
+利用模拟型红外传感器测量储液罐液位高度。
+
+```c
+/* 液位监测示例 */
+void Tank_LevelMonitor(void)
+{
+    float distance = IR_Analog_GetDistance();
+    float tank_height = 50.0f;  /* 罐高 50cm */
+
+    if (distance > 0) {
+        float liquid_level = tank_height - distance;
+
+        if (liquid_level < 10.0f) {
+            /* 液位过低，触发报警 */
+            Alarm_Activate();
+        }
+    }
+}
+```
+
+---
+
+#### 7.6.7 本节小结
+
+本节介绍了红外传感器的接口编程方法：
+
+- **数字输出型**（TCRT5000）：通过 GPIO 读取高低电平判断障碍物有无，适用于简单的存在性检测
+- **模拟输出型**（GP2Y0A21）：通过 ADC 采样输出电压并转换为距离值，可实现距离估算
+- **PicSimlab 仿真**：可使用虚拟 Ir 组件进行接口验证，无需实际硬件
+
+红外传感器成本低、接口简单，是嵌入式系统中最常用的传感器之一，广泛应用于物体检测、计数、测距等场景。
 
 ---
 
@@ -388,7 +749,7 @@ uint8_t IR_IsObstacle(void)
 - **超声波 HC-SR04**：定时器输入捕获测量 Echo 脉冲宽度，计算距离
 - **温湿度 DHT11**：单总线协议时序解析，40 位数据读取与校验
 - **ADC 模拟采样**：12 位 ADC 单通道轮询与多通道 DMA 扫描
-- **红外传感器**：GPIO 数字电平读取
+- **红外传感器**：数字输出型 GPIO 读取 + 模拟输出型 ADC 采样与距离计算
 
 这些传感器构成了嵌入式系统"输入"环节的核心，为后续的数据处理、显示和控制提供原始数据源。
 

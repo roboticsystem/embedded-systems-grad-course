@@ -15,7 +15,7 @@
 
 ## 自检清单
 
-> 各条规则详见 [教材书写规范](https://robotic.uwis.cn/contributing/)（`docs/contributing.md`）
+> 各条规则详见 [教材书写规范](http://robotics.uwis.cn/contributing/)（`docs/contributing.md`）
 
 - [ ] frontmatter 正确（→ 规范 §1）
 - [ ] 标题编号连续、层级正确（→ 规范 §2）

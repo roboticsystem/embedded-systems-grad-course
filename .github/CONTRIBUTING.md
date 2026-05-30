@@ -6,7 +6,7 @@
 
 所有格式规则、示例和自检清单的**唯一权威来源**：
 
-👉 **[教材书写规范](https://robotic.uwis.cn/contributing/)**（站点在线版）
+👉 **[教材书写规范](http://robotics.uwis.cn/contributing/)**（站点在线版）
 
 👉 **[docs/contributing.md](../docs/contributing.md)**（仓库源文件）
 

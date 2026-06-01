@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="720" viewBox="0 0 1200 720" role="img" aria-labelledby="title desc">
+  <title id="title">PicSimLab UART DMA 协议仿真运行效果</title>
+  <desc id="desc">STM32 Blue Pill 仿真板、UART Terminal 十六进制收发记录和 PC13 LED 状态。</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#f6f8fa"/>
+      <stop offset="1" stop-color="#e8eef5"/>
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="8" stdDeviation="10" flood-color="#1f2937" flood-opacity="0.18"/>
+    </filter>
+    <style>
+      .ui { font-family: "Helvetica Neue", Arial, "Noto Sans CJK SC", sans-serif; }
+      .mono { font-family: Menlo, Consolas, "Liberation Mono", monospace; }
+      .title { font-size: 28px; font-weight: 700; fill: #102033; }
+      .label { font-size: 18px; font-weight: 700; fill: #1f2937; }
+      .small { font-size: 15px; fill: #374151; }
+      .tiny { font-size: 13px; fill: #607086; }
+      .terminal { font-size: 18px; fill: #d9f99d; }
+      .rx { fill: #93c5fd; }
+      .tx { fill: #facc15; }
+      .ok { fill: #34d399; }
+      .err { fill: #fb7185; }
+    </style>
+  </defs>
+
+  <rect width="1200" height="720" fill="url(#bg)"/>
+  <text x="48" y="55" class="ui title">PicSimLab 运行效果截图说明：STM32 UART DMA 协议帧实验</text>
+  <text x="50" y="86" class="ui small">Board: STM32 Blue Pill | USART1: 115200 8N1 | RX DMA: DMA1 Channel5 | TX DMA: DMA1 Channel4</text>
+
+  <rect x="45" y="115" width="1110" height="545" rx="8" fill="#ffffff" filter="url(#shadow)"/>
+  <rect x="45" y="115" width="1110" height="38" rx="8" fill="#dfe7ef"/>
+  <circle cx="70" cy="134" r="7" fill="#ef4444"/>
+  <circle cx="94" cy="134" r="7" fill="#f59e0b"/>
+  <circle cx="118" cy="134" r="7" fill="#10b981"/>
+  <text x="150" y="140" class="ui small">PicSimLab - stm32_blue_pill - UART DMA Protocol</text>
+
+  <rect x="75" y="185" width="420" height="390" rx="8" fill="#eef6ff" stroke="#9db7d6"/>
+  <text x="105" y="220" class="ui label">STM32 Blue Pill</text>
+  <rect x="180" y="260" width="180" height="240" rx="8" fill="#1f6feb" stroke="#174ea6"/>
+  <rect x="205" y="285" width="130" height="45" rx="4" fill="#0f172a"/>
+  <text x="222" y="313" class="mono small" fill="#d1d5db">STM32F103</text>
+  <circle cx="386" cy="283" r="12" fill="#f3f4f6" stroke="#94a3b8"/>
+  <circle cx="386" cy="283" r="7" fill="#22c55e"/>
+  <text x="406" y="288" class="ui small">PC13 LED ON</text>
+  <line x1="360" y1="380" x2="465" y2="380" stroke="#ef4444" stroke-width="4"/>
+  <line x1="360" y1="420" x2="465" y2="420" stroke="#3b82f6" stroke-width="4"/>
+  <text x="382" y="371" class="mono tiny">PA9 TX</text>
+  <text x="382" y="443" class="mono tiny">PA10 RX</text>
+  <text x="105" y="615" class="ui small">现象：发送 LED_ON 后 PC13 低电平点亮，发送 LED_OFF 后熄灭。</text>
+
+  <rect x="535" y="185" width="575" height="390" rx="8" fill="#111827" stroke="#334155"/>
+  <rect x="535" y="185" width="575" height="42" rx="8" fill="#1f2937"/>
+  <text x="560" y="212" class="ui label" fill="#e5e7eb">UART Terminal - HEX Mode</text>
+  <text x="560" y="255" class="mono terminal tx">TX &gt; AA 55 00 01 01</text>
+  <text x="560" y="286" class="mono terminal rx">RX &lt; AA 55 02 80 01 00 83</text>
+  <text x="560" y="317" class="mono terminal ok">INFO: ACK, LED_ON executed</text>
+  <text x="560" y="366" class="mono terminal tx">TX &gt; AA 55 02 03 48 69 20</text>
+  <text x="560" y="397" class="mono terminal rx">RX &lt; AA 55 02 03 48 69 20</text>
+  <text x="560" y="428" class="mono terminal ok">INFO: ECHO payload = "Hi"</text>
+  <text x="560" y="477" class="mono terminal tx">TX &gt; AA 55 00 09 09</text>
+  <text x="560" y="508" class="mono terminal rx">RX &lt; AA 55 02 81 09 02 88</text>
+  <text x="560" y="539" class="mono terminal err">INFO: ERR, unknown command</text>
+
+  <rect x="535" y="595" width="575" height="42" rx="6" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="558" y="622" class="ui small">结果：DMA 接收、IDLE 回调、状态机解析、DMA 应答发送均按预期工作。</text>
+</svg>

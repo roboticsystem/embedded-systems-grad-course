@@ -96,8 +96,12 @@
 | 图 10-1 | 本章知识导图：从控制基础到 PID 工程实现。 | [chapter10.md](chapter10.md) |
 | 图 10-2 | 闭环控制系统框图：目标值 $r(t)$、偏差 $e(t) = r(t) - y(t)$、控制量 $u(t)$、输出 $y(t)$。 | [chapter10.md](chapter10.md) |
 | 图 11-1 | 本章知识导图：从有线总线到物联网协议的完整通信体系。 | [chapter11.md](chapter11.md) |
-| 图 11-2 | MQTT 发布/订阅模型：发布者和订阅者通过 Broker 解耦通信。 | [chapter11.md](chapter11.md) |
-| 图 11-3 | 农业物联网系统架构：多个 CAN 节点采集数据，网关汇聚后通过 Wi-Fi/MQTT 上报云平台。 | [chapter11.md](chapter11.md) |
+| 图 11-2 | UART DMA 不定长接收与 DMA 应答发送流程。 | [chapter11.md](chapter11.md) |
+| 图 11-3 | 协议帧逐字节解析状态机。 | [chapter11.md](chapter11.md) |
+| 图 11-4 | UART DMA 协议实验工程结构。 | [chapter11.md](chapter11.md) |
+| 图 11-5 | PicSimLab UART DMA 协议仿真运行效果：串口终端发送协议帧后，设备返回 ACK、ERR 或 ECHO 数据，并同步改变 PC13 LED 状态。 | [chapter11.md](chapter11.md) |
+| 图 11-6 | MQTT 发布/订阅模型：发布者和订阅者通过 Broker 解耦通信。 | [chapter11.md](chapter11.md) |
+| 图 11-7 | 农业物联网系统架构：多个 CAN 节点采集数据，网关汇聚后通过 Wi-Fi/MQTT 上报云平台。 | [chapter11.md](chapter11.md) |
 | 图 12-1 | 本章知识导图：嵌入式系统综合设计的关键要素。 | [chapter12.md](chapter12.md) |
 | 图 12-2 | 分层固件架构：上层调用下层接口，禁止跨层或反向调用。 | [chapter12.md](chapter12.md) |
 | 图 12-3 | 智能温室控制器主程序流程。 | [chapter12.md](chapter12.md) |
@@ -193,11 +197,15 @@
 | 表 10-1 | PID 各环节效果对比 | [chapter10.md](chapter10.md) |
 | 表 10-2 | Ziegler-Nichols 参数整定表 | [chapter10.md](chapter10.md) |
 | 表 11-1 | 四种常用有线通信总线对比 | [chapter11.md](chapter11.md) |
-| 表 11-2 | 自定义通信协议帧格式 | [chapter11.md](chapter11.md) |
-| 表 11-3 | CAN 标准数据帧各字段 | [chapter11.md](chapter11.md) |
-| 表 11-4 | 常用 ESP8266 AT 指令 | [chapter11.md](chapter11.md) |
-| 表 11-5 | LoRa 与 Wi-Fi 对比 | [chapter11.md](chapter11.md) |
-| 表 11-6 | MQTT QoS 等级 | [chapter11.md](chapter11.md) |
+| 表 11-2 | UART DMA 协议实验知识点 | [chapter11.md](chapter11.md) |
+| 表 11-3 | STM32F103C8T6 USART1 与 DMA 配置 | [chapter11.md](chapter11.md) |
+| 表 11-4 | 自定义 UART 协议帧格式 | [chapter11.md](chapter11.md) |
+| 表 11-5 | UART 协议命令与响应 | [chapter11.md](chapter11.md) |
+| 表 11-6 | PicSimLab 仿真配置与测试用例 | [chapter11.md](chapter11.md) |
+| 表 11-7 | CAN 标准数据帧各字段 | [chapter11.md](chapter11.md) |
+| 表 11-8 | 常用 ESP8266 AT 指令 | [chapter11.md](chapter11.md) |
+| 表 11-9 | LoRa 与 Wi-Fi 对比 | [chapter11.md](chapter11.md) |
+| 表 11-10 | MQTT QoS 等级 | [chapter11.md](chapter11.md) |
 | 表 12-1 | 三种固件架构对比 | [chapter12.md](chapter12.md) |
 | 表 12-2 | STM32F103 低功耗模式对比 | [chapter12.md](chapter12.md) |
 | 表 12-3 |  | [chapter12.md](chapter12.md) |

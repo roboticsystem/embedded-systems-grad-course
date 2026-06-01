@@ -56,70 +56,244 @@ skinparam mindmapNodeBorderColor                #90CAF9
 
 ---
 
-### 11.3 UART 串口通信
+### 11.3 UART DMA 收发与协议帧编程
 
-UART（Universal Asynchronous Receiver/Transmitter）是最常用的调试和通信接口。第 3 章已介绍基本配置，本节补充 DMA 收发和协议帧设计。
+UART（Universal Asynchronous Receiver/Transmitter）是 STM32 中最常用的调试与设备通信接口。简单轮询接收适合少量字节，但当上位机或通信模块连续发送数据时，轮询方式会占用 CPU，普通中断方式又容易因为字节级中断过多而增加实时性压力。本节以 `STM32F103C8T6 + STM32CubeMX + STM32CubeIDE + PicSimLab` 为实验平台，讲解 UART DMA 不定长接收、DMA 发送和自定义协议帧解析。
 
-#### 11.3.1 DMA 接收不定长数据
+#### 11.3.1 学习目标
 
-利用 UART 空闲中断 + DMA 实现不定长数据接收，是工程中最常用的方案：
+完成本节学习后，应达到以下目标：
 
-```c
-/* 全局缓冲区 */
-#define RX_BUF_SIZE  256
-uint8_t rx_buf[RX_BUF_SIZE];
-volatile uint16_t rx_len = 0;
-volatile uint8_t rx_flag = 0;
+1. 能说明 UART、DMA、空闲中断在不定长接收中的分工。
+2. 能使用 CubeMX 配置 USART1、DMA1 Channel4/Channel5、NVIC 和 GPIO。
+3. 能设计包含帧头、长度、命令、数据和校验字段的二进制协议帧。
+4. 能编写帧解析状态机，并对错误帧、粘包和半包进行基本处理。
+5. 能在 PicSimLab 中通过串口终端验证 `LED_ON`、`LED_OFF` 和 `ECHO` 命令。
 
-/* 启动 DMA 接收 */
-void UART_StartReceive(void)
-{
-    __HAL_UART_ENABLE_IT(&huart1, UART_IT_IDLE);
-    HAL_UART_Receive_DMA(&huart1, rx_buf, RX_BUF_SIZE);
+#### 11.3.2 知识点
+
+**表 11-2** UART DMA 协议实验知识点
+<!-- tab:ch11-2 UART DMA 协议实验知识点 -->
+
+| 知识点 | 作用 | 工程关注点 |
+|------|------|------|
+| UART 异步通信 | 完成 MCU 与上位机的字节流收发 | 波特率、数据位、停止位、校验位必须一致 |
+| DMA 接收 | 将 UART 接收到的数据搬运到内存缓冲区 | 缓冲区长度、重新启动 DMA 的时机 |
+| 空闲中断 | 判断一帧不定长数据已经暂时结束 | 清除 IDLE 标志，避免重复进入回调 |
+| 协议帧 | 将字节流组织为有边界、有含义的数据包 | 帧头同步、长度检查、校验检查 |
+| 状态机 | 在连续字节流中逐字节解析协议帧 | 能处理半包、错包和粘包 |
+
+本实验使用 USART1，常用引脚和 DMA 通道如表 11-3 所示。
+
+**表 11-3** STM32F103C8T6 USART1 与 DMA 配置
+<!-- tab:ch11-3 STM32F103C8T6 USART1 与 DMA 配置 -->
+
+| 项目 | 配置值 | 说明 |
+|------|------|------|
+| 芯片 | STM32F103C8T6 | PicSimLab Blue Pill 常用仿真目标 |
+| 串口 | USART1 | 用于连接虚拟 UART Terminal |
+| TX 引脚 | PA9 | MCU 发送，上位机接收 |
+| RX 引脚 | PA10 | MCU 接收，上位机发送 |
+| 波特率 | 115200 bps | 8 数据位、无校验、1 停止位 |
+| RX DMA | DMA1 Channel5 | 外设到内存 |
+| TX DMA | DMA1 Channel4 | 内存到外设 |
+| 指示灯 | PC13 | Blue Pill 板载 LED，低电平点亮 |
+
+#### 11.3.3 原理
+
+UART DMA 不定长接收的核心思想是：USART 外设负责串并转换，DMA 负责把收到的字节搬运到内存，空闲中断负责通知“本次连续接收暂时结束”。CPU 不再为每个字节进入中断，而是在一段数据到达后统一解析。
+
+```bob
+  ┌─────────────┐       RX 字节流        ┌──────────────┐
+  │  上位机/终端 │──────────────────────▶│ USART1 外设   │
+  └─────────────┘                        └──────┬───────┘
+                                                 │ DMA 请求
+                                                 ▼
+                                          ┌──────────────┐
+                                          │ DMA1 Channel5 │
+                                          └──────┬───────┘
+                                                 │ 写入
+                                                 ▼
+                                          ┌──────────────┐
+                                          │ rx_dma_buf[] │
+                                          └──────┬───────┘
+                                                 │ IDLE 回调
+                                                 ▼
+                                          ┌──────────────┐
+                                          │ 协议状态机    │
+                                          └──────┬───────┘
+                                                 │ ACK/ERR/ECHO
+                                                 ▼
+                                          ┌──────────────┐
+                                          │ DMA1 Channel4 │
+                                          └──────┬───────┘
+                                                 │ TX
+                                                 ▼
+                                          ┌─────────────┐
+                                          │  上位机/终端 │
+                                          └─────────────┘
+```
+
+**图 11-2** UART DMA 不定长接收与 DMA 应答发送流程。
+<!-- fig:ch11-2 UART DMA 不定长接收与 DMA 应答发送流程。 -->
+
+协议帧采用固定帧头、长度字段和异或校验。校验范围为 `LEN`、`CMD` 和 `DATA` 字段，不包含帧头。
+
+**表 11-4** 自定义 UART 协议帧格式
+<!-- tab:ch11-4 自定义 UART 协议帧格式 -->
+
+| 字段 | 长度 | 示例 | 说明 |
+|------|:---:|------|------|
+| SOF1 | 1 字节 | `0xAA` | 帧头第 1 字节 |
+| SOF2 | 1 字节 | `0x55` | 帧头第 2 字节 |
+| LEN | 1 字节 | `0x02` | 数据域长度，范围 0~64 |
+| CMD | 1 字节 | `0x03` | 命令码 |
+| DATA | N 字节 | `0x48 0x69` | 有效数据 |
+| CRC | 1 字节 | `0x20` | `LEN ^ CMD ^ DATA[0] ... DATA[N-1]` |
+
+实验命令集如表 11-5 所示。
+
+**表 11-5** UART 协议命令与响应
+<!-- tab:ch11-5 UART 协议命令与响应 -->
+
+| 命令 | 命令码 | 请求帧示例 | 正常现象 |
+|------|:---:|------|------|
+| LED_ON | `0x01` | `AA 55 00 01 01` | PC13 LED 点亮，返回 ACK |
+| LED_OFF | `0x02` | `AA 55 00 02 02` | PC13 LED 熄灭，返回 ACK |
+| ECHO | `0x03` | `AA 55 02 03 48 69 20` | 返回同样的数据 `Hi` |
+| ACK | `0x80` | 由设备返回 | 表示命令执行成功 |
+| ERR | `0x81` | 由设备返回 | 表示长度、校验或命令错误 |
+
+帧解析状态机按字节推进。遇到错误帧头时重新寻找 `0xAA`；长度超过最大值时丢弃本帧；校验正确后再交给业务层执行命令。
+
+```plantuml
+@startuml
+skinparam backgroundColor white
+skinparam state {
+  BackgroundColor #E3F2FD
+  BorderColor #1976D2
+  FontColor #0D47A1
 }
 
-/* 空闲中断回调（在 USARTx_IRQHandler 中调用） */
-void UART_IDLE_Handler(void)
+[*] --> WaitSof1
+WaitSof1 --> WaitSof2 : byte == 0xAA
+WaitSof1 --> WaitSof1 : other
+WaitSof2 --> WaitLen : byte == 0x55
+WaitSof2 --> WaitSof2 : byte == 0xAA
+WaitSof2 --> WaitSof1 : other
+WaitLen --> WaitCmd : len <= 64
+WaitLen --> WaitSof1 : len > 64
+WaitCmd --> WaitCrc : len == 0
+WaitCmd --> WaitData : len > 0
+WaitData --> WaitData : data not complete
+WaitData --> WaitCrc : data complete
+WaitCrc --> WaitSof1 : crc error
+WaitCrc --> Dispatch : crc ok
+Dispatch --> WaitSof1 : execute command
+@enduml
+```
+
+**图 11-3** 协议帧逐字节解析状态机。
+<!-- fig:ch11-3 协议帧逐字节解析状态机。 -->
+
+#### 11.3.4 示例
+
+示例工程位于 `code_examples/stm32_uart_dma_protocol/`，按 CubeMX/CubeIDE 常见目录组织。该目录不提交 `Debug/`、`Release/`、`.elf`、`.bin`、`.hex` 等编译产物，满足课程仓库对 ROM 镜像和中间文件的清理要求。
+
+```bob
+  +---------------------------------------------------------------+
+  | code_examples/stm32_uart_dma_protocol                         |
+  +----------------------+----------------------------------------+
+  | STM32_UART_DMA_      | CubeMX 工程配置文件                     |
+  | Protocol.ioc         |                                        |
+  +----------------------+----------------------------------------+
+  | README.md            | 编译、仿真和测试说明                   |
+  +----------------------+----------------------------------------+
+  | Core/Inc             | app_protocol.h、uart_dma_protocol.h、   |
+  |                      | main.h、usart.h、dma.h、gpio.h          |
+  +----------------------+----------------------------------------+
+  | Core/Src             | app_protocol.c、uart_dma_protocol.c、   |
+  |                      | main.c、usart.c、dma.c、gpio.c          |
+  +----------------------+----------------------------------------+
+```
+
+**图 11-4** UART DMA 协议实验工程结构。
+<!-- fig:ch11-4 UART DMA 协议实验工程结构。 -->
+
+CubeMX 配置完成后，在 `main.c` 中初始化 HAL、时钟、GPIO、DMA、USART1，再启动协议层。
+
+```c
+int main(void)
 {
-    if (__HAL_UART_GET_FLAG(&huart1, UART_FLAG_IDLE)) {
-        __HAL_UART_CLEAR_IDLEFLAG(&huart1);
-        HAL_UART_DMAStop(&huart1);
-        rx_len = RX_BUF_SIZE - __HAL_DMA_GET_COUNTER(huart1.hdmarx);
-        rx_flag = 1;
-        HAL_UART_Receive_DMA(&huart1, rx_buf, RX_BUF_SIZE);
+    HAL_Init();
+    SystemClock_Config();
+    MX_GPIO_Init();
+    MX_DMA_Init();
+    MX_USART1_UART_Init();
+
+    Protocol_Init();
+    UART_DMA_Protocol_Start();
+
+    while (1) {
+        Protocol_Poll();
     }
 }
 ```
 
-#### 11.3.2 自定义协议帧
-
-工程通信需要定义帧结构保证数据完整性：
-
-**表 11-2** 自定义通信协议帧格式
-<!-- tab:ch11-2 自定义通信协议帧格式 -->
-
-| 帧头 | 长度 | 命令 | 数据 | 校验 |
-|:----:|:---:|:---:|:----:|:---:|
-| 0xAA 0x55 | 1字节（数据域长度） | 1字节 | N字节 | 1字节（异或校验） |
+DMA 接收到一段不定长数据后，HAL 会进入 `HAL_UARTEx_RxEventCallback()`，应用层在回调中把本次收到的字节交给协议状态机，然后立即重新启动 DMA 接收。
 
 ```c
-typedef struct __attribute__((packed)) {
-    uint8_t header[2];  /* 0xAA, 0x55 */
-    uint8_t length;     /* 数据域长度 */
-    uint8_t cmd;        /* 命令码 */
-    uint8_t data[64];   /* 数据域 */
-    uint8_t checksum;   /* XOR 校验 */
-} FrameTypeDef;
-
-uint8_t Frame_CalcChecksum(const uint8_t *buf, uint16_t len)
+void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t size)
 {
-    uint8_t xor_val = 0;
-    for (uint16_t i = 0; i < len; i++) {
-        xor_val ^= buf[i];
+    if (huart->Instance == USART1) {
+        Protocol_ParseBytes(uart_dma_rx_buffer, size);
+        UART_DMA_Protocol_Start();
     }
-    return xor_val;
 }
 ```
+
+#### 11.3.5 仿真
+
+本实验使用 PicSimLab 的 STM32 Blue Pill 板卡和 UART Terminal 组件验证收发逻辑。仿真时不需要提交 `.bin` 文件；`.bin` 由 CubeIDE 本地编译生成，仅用于加载到 PicSimLab。
+
+**表 11-6** PicSimLab 仿真配置与测试用例
+<!-- tab:ch11-6 PicSimLab 仿真配置与测试用例 -->
+
+| 项目 | 配置或输入 | 预期结果 |
+|------|------|------|
+| 板卡 | `stm32_blue_pill` | QEMU 后端启动 STM32F103C8T6 |
+| 固件 | `Debug/STM32_UART_DMA_Protocol.bin` | 程序运行后串口可交互 |
+| 串口 | USART1，115200 8N1 | UART Terminal 可收发十六进制帧 |
+| LED_ON | `AA 55 00 01 01` | PC13 LED 点亮，返回 `AA 55 02 80 01 00 83` |
+| LED_OFF | `AA 55 00 02 02` | PC13 LED 熄灭，返回 `AA 55 02 80 02 00 80` |
+| ECHO | `AA 55 02 03 48 69 20` | 返回 `AA 55 02 03 48 69 20` |
+| 错误帧 | `AA 55 00 09 09` | 返回 ERR，说明未知命令被识别 |
+
+接线与配置步骤如下：
+
+1. 在 STM32CubeIDE 中打开 `STM32_UART_DMA_Protocol.ioc`，确认目标芯片为 `STM32F103C8Tx`。
+2. 生成并编译工程，得到本地文件 `Debug/STM32_UART_DMA_Protocol.bin`。
+3. 打开 PicSimLab，选择 `Board → STM32 → Blue Pill`。
+4. 执行 `File → Load Hex/Bin`，加载 CubeIDE 生成的 `.bin`。
+5. 打开 `Tools → Serial Terminal` 或添加 UART Terminal 部件，设置为 `115200, 8N1, Hex` 模式。
+6. 发送表 11-6 中的测试帧，观察串口返回数据和 PC13 LED 状态。
+
+命令行启动可写为：
+
+```bash
+picsimlab --board=stm32_blue_pill --firmware=Debug/STM32_UART_DMA_Protocol.bin
+```
+
+![PicSimLab UART DMA 协议仿真运行效果](assets/images/ch11-picsimlab-uart-dma-result.svg)
+
+**图 11-5** PicSimLab UART DMA 协议仿真运行效果：串口终端发送协议帧后，设备返回 ACK、ERR 或 ECHO 数据，并同步改变 PC13 LED 状态。
+<!-- fig:ch11-5 PicSimLab UART DMA 协议仿真运行效果：串口终端发送协议帧后，设备返回 ACK、ERR 或 ECHO 数据，并同步改变 PC13 LED 状态。 -->
+
+结果分析：`LED_ON` 和 `LED_OFF` 的请求帧长度为 0，因此校验值等于命令码本身；`ECHO` 的校验值为 `0x02 ^ 0x03 ^ 0x48 ^ 0x69 = 0x20`。若发送未知命令或校验错误，状态机会进入业务错误分支并返回 ERR 帧，说明帧同步、长度判断和校验判断均已生效。
+
+#### 11.3.6 总结
+
+UART DMA 不定长接收适合上位机协议、无线模块 AT 响应、工业网关数据透传等场景。其工程要点是：DMA 负责高效搬运字节，空闲中断负责划分接收批次，状态机负责从连续字节流中恢复协议帧。与轮询和字节中断相比，该方案能明显降低 CPU 中断频率，并提高通信代码的可维护性。实际项目中还应继续补充环形缓冲区、超时机制、CRC8/CRC16 校验和协议版本号，以增强长时间运行的可靠性。
 
 ---
 
@@ -129,8 +303,8 @@ CAN（Controller Area Network）最初为汽车网络设计，因其高可靠性
 
 #### 11.4.1 CAN 帧结构
 
-**表 11-3** CAN 标准数据帧各字段
-<!-- tab:ch11-3 CAN 标准数据帧各字段 -->
+**表 11-7** CAN 标准数据帧各字段
+<!-- tab:ch11-7 CAN 标准数据帧各字段 -->
 
 | 字段 | 位数 | 说明 |
 |------|:----:|------|
@@ -205,8 +379,8 @@ ESP8266 是低成本 Wi-Fi 模块，通过 AT 指令与 STM32 串口通信，可
 
 #### 11.5.1 AT 指令基础
 
-**表 11-4** 常用 ESP8266 AT 指令
-<!-- tab:ch11-4 常用 ESP8266 AT 指令 -->
+**表 11-8** 常用 ESP8266 AT 指令
+<!-- tab:ch11-8 常用 ESP8266 AT 指令 -->
 
 | 指令 | 功能 | 示例响应 |
 |------|------|---------|
@@ -255,8 +429,8 @@ uint8_t ESP_Init(const char *ssid, const char *pass)
 
 LoRa（Long Range）是一种低功耗广域网（LPWAN）技术，适用于农业环境监测等远距离、低速率场景。
 
-**表 11-5** LoRa 与 Wi-Fi 对比
-<!-- tab:ch11-5 LoRa 与 Wi-Fi 对比 -->
+**表 11-9** LoRa 与 Wi-Fi 对比
+<!-- tab:ch11-9 LoRa 与 Wi-Fi 对比 -->
 
 | 特性 | LoRa | Wi-Fi |
 |------|------|-------|
@@ -290,11 +464,11 @@ MQTT（Message Queuing Telemetry Transport）是物联网中最流行的轻量�
                               +----------+
 ```
 
-**图 11-2** MQTT 发布/订阅模型：发布者和订阅者通过 Broker 解耦通信。
-<!-- fig:ch11-2 MQTT 发布/订阅模型：发布者和订阅者通过 Broker 解耦通信。 -->
+**图 11-6** MQTT 发布/订阅模型：发布者和订阅者通过 Broker 解耦通信。
+<!-- fig:ch11-6 MQTT 发布/订阅模型：发布者和订阅者通过 Broker 解耦通信。 -->
 
-**表 11-6** MQTT QoS 等级
-<!-- tab:ch11-6 MQTT QoS 等级 -->
+**表 11-10** MQTT QoS 等级
+<!-- tab:ch11-10 MQTT QoS 等级 -->
 
 | QoS | 语义 | 说明 |
 |:---:|------|------|
@@ -351,8 +525,8 @@ uint16_t MQTT_BuildPublish(uint8_t *buf, const char *topic,
                                                               └──────────┘
 ```
 
-**图 11-3** 农业物联网系统架构：多个 CAN 节点采集数据，网关汇聚后通过 Wi-Fi/MQTT 上报云平台。
-<!-- fig:ch11-3 农业物联网系统架构：多个 CAN 节点采集数据，网关汇聚后通过 Wi-Fi/MQTT 上报云平台。 -->
+**图 11-7** 农业物联网系统架构：多个 CAN 节点采集数据，网关汇聚后通过 Wi-Fi/MQTT 上报云平台。
+<!-- fig:ch11-7 农业物联网系统架构：多个 CAN 节点采集数据，网关汇聚后通过 Wi-Fi/MQTT 上报云平台。 -->
 
 **系统特点：**
 

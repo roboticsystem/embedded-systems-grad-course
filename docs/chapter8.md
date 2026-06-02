@@ -224,6 +224,7 @@ note top of r2 : 4.7kΩ 上拉电阻
 @enduml
 ```
 ![图8-3 总线电气连接图](assets/ch8/ch8-3.png)
+
 **图 8-3** I2C 总线电气连接图（含上拉电阻，PlantUML 脚本生成，上图为其渲染效果）。
 #### 8.4.4 软件设计与实现
 工程配置（STM32CubeIDE）
@@ -339,6 +340,7 @@ stop
 @enduml
 ```
 ![图8-4 主程序流程图](assets/ch8/ch8-4.png)
+
 **图 8-4** 主程序流程图（PlantUML 脚本生成，上图为其渲染效果）。
 **工程源码位置**：本节的完整 STM32CubeIDE 工程位于 `code_examples/OLED_SSD1306_Driver/`。
 #### 8.4.5 PicsimLab 仿真验证
@@ -348,9 +350,11 @@ stop
 
 按硬件连接表连线：SCL → PB6, SDA → PB7, VCC → 3.3V, GND → GND（其余引脚 NC）。
 ![图8-5 仿真引脚接线图](assets/ch8/ch8-5.png)
+
 **图 8-5** PicsimLab 仿真引脚接线。
 运行结果截图
 ![图8-6 仿真运行结果图](assets/ch8/ch8-6.png)
+
 **图 8-6** PicsimLab 仿真运行效果：屏幕显示温度 29.0°C、湿度 68.0% 及 “SSD1306 OK”。
 结果分析
 屏幕显示清晰无乱码，温度每 2 秒增加 0.5°C 并在超过 40°C 时重置，说明 I2C 通信正常，初始化序列正确，字符显示函数工作正常。

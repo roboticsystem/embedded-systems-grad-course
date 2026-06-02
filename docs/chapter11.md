@@ -273,7 +273,14 @@ SX1278 模块通过 SPI 接口与 STM32 通信，基本流程：配置频率/扩
 
 ### 11.7 MQTT 物联网协议
 
-MQTT（Message Queuing Telemetry Transport）是物联网中最流行的轻量级消息协议，基于发布/订阅模型。
+MQTT（Message Queuing Telemetry Transport）是面向物联网的轻量级发布/订阅消息协议，常运行于 TCP（默认端口 1883）。农业物联网网关在采集温湿度后，可将数据封装为 MQTT PUBLISH 报文，经 Wi-Fi 模块发往云平台 Broker。
+
+学习目标：
+
+- 说明 Broker、Topic、QoS 在发布/订阅模型中的作用；
+- 按 MQTT 3.1.1 格式手动构造 CONNECT 与 PUBLISH 报文；
+- 在 C 代码中实现剩余长度变长编码，并区分 QoS0 与 QoS1 固定头；
+- 使用 PicSimLab 观察 USART 输出的报文字节流，完成组包验证。
 
 #### 11.7.1 核心概念
 
@@ -290,44 +297,182 @@ MQTT（Message Queuing Telemetry Transport）是物联网中最流行的轻量�
                               +----------+
 ```
 
-**图 11-2** MQTT 发布/订阅模型：发布者和订阅者通过 Broker 解耦通信。
-<!-- fig:ch11-2 MQTT 发布/订阅模型：发布者和订阅者通过 Broker 解耦通信。 -->
+**图 11-2** MQTT 发布/订阅模型：发布者与订阅者通过 Broker 解耦，彼此无需知道对方地址。
+<!-- fig:ch11-2 MQTT 发布/订阅模型：发布者与订阅者通过 Broker 解耦，彼此无需知道对方地址。 -->
 
-**表 11-6** MQTT QoS 等级
-<!-- tab:ch11-6 MQTT QoS 等级 -->
+**表 11-6** MQTT 核心术语
+<!-- tab:ch11-6 MQTT 核心术语 -->
 
-| QoS | 语义 | 说明 |
-|:---:|------|------|
-| 0 | 最多一次（At most once） | 不确认，可能丢失 |
-| 1 | 至少一次（At least once） | 确认机制，可能重复 |
-| 2 | 恰好一次（Exactly once） | 四次握手，开销最大 |
+| 术语 | 含义 | 农业物联网示例 |
+|------|------|----------------|
+| Broker | 消息中转服务器 | 云端 Mosquitto、EMQX |
+| Topic | 层级主题字符串 | `farm/zone1/temp` |
+| Publisher | 向 Topic 发布消息 | 温室网关 STM32 + ESP8266 |
+| Subscriber | 订阅 Topic 接收消息 | 手机 APP、云平台规则引擎 |
 
-#### 11.7.2 嵌入式 MQTT 报文构造
+#### 11.7.2 QoS 等级说明
 
-MQTT CONNECT 报文由固定头 + 可变头 + 有效载荷组成。嵌入式端通常使用轻量级 MQTT 库（如 MQTTPacket），或手动构造报文通过 TCP 发送：
+**表 11-7** MQTT QoS 等级
+<!-- tab:ch11-7 MQTT QoS 等级 -->
+
+| QoS | 语义 | 机制概要 | 适用场景 |
+|:---:|------|----------|----------|
+| 0 | 最多一次（At most once） | 无 PUBACK，发完即忘 | 高频采样、允许偶尔丢包的温度曲线 |
+| 1 | 至少一次（At least once） | 发布者收 PUBACK，可能重复 | 灌溉开关、告警上报 |
+| 2 | 恰好一次（Exactly once） | 四次握手，开销最大 | 计费、关键指令（嵌入式较少用） |
+
+QoS 体现在 **PUBLISH 固定头** 的 bit1～bit2：类型高 4 位为 `0011`（PUBLISH）。QoS0 时首字节常为 `0x30`，QoS1 为 `0x32`。QoS1/2 时在主题名之后还需 **报文标识符（Packet Identifier）** 2 字节。
+
+#### 11.7.3 报文结构原理
+
+MQTT 控制报文由固定头、可变头、有效载荷三部分组成：
+
+```plantuml
+@startuml
+skinparam backgroundColor white
+rectangle "固定头\n(类型+标志+剩余长度)" as FH
+rectangle "可变头\n(依报文类型变化)" as VH
+rectangle "有效载荷\n(可选)" as PL
+FH -down-> VH
+VH -down-> PL
+@enduml
+```
+
+**表 11-8** CONNECT 与 PUBLISH 可变头概要（MQTT 3.1.1）
+<!-- tab:ch11-8 CONNECT 与 PUBLISH 可变头概要（MQTT 3.1.1） -->
+
+| 报文 | 可变头主要内容 | 载荷 |
+|------|----------------|------|
+| CONNECT | 协议名、协议级别、连接标志、保活时间 | Client ID，及可选用户名/密码 |
+| PUBLISH | 主题名（2 字节长度 + UTF-8 字符串） | 应用数据；QoS>0 时先有 Packet Id |
+
+**剩余长度** 使用 1～4 字节变长编码：每字节低 7 位为数值，最高位为延续标志。建议封装 `MQTT_EncodeRemainingLength()` 统一处理。
+
+#### 11.7.4 CONNECT 报文构造
+
+下列代码在无第三方 MQTT 库时，构造最简 **Clean Session** 连接（协议名 `MQTT`、版本 4）：
 
 ```c
-/* 简化的 MQTT PUBLISH 报文构造 */
-uint16_t MQTT_BuildPublish(uint8_t *buf, const char *topic,
-                           const char *payload)
+uint8_t MQTT_EncodeRemainingLength(uint8_t *buf, uint32_t len)
 {
-    uint16_t topic_len = strlen(topic);
-    uint16_t payload_len = strlen(payload);
-    uint16_t remain_len = 2 + topic_len + payload_len;
+    uint8_t pos = 0;
+    do {
+        uint8_t digit = (uint8_t)(len % 128U);
+        len /= 128U;
+        if (len > 0U) {
+            digit |= 0x80U;
+        }
+        buf[pos++] = digit;
+    } while (len > 0U);
+    return pos;
+}
+
+uint16_t MQTT_BuildConnect(uint8_t *buf, const char *client_id, uint16_t keep_alive_sec)
+{
+    uint16_t cid_len = (uint16_t)strlen(client_id);
+    uint32_t remain = 6U + 1U + 1U + 2U + 2U + cid_len;
     uint16_t idx = 0;
 
-    buf[idx++] = 0x30;                     /* PUBLISH, QoS0 */
-    buf[idx++] = (uint8_t)remain_len;      /* 剩余长度（<128） */
+    buf[idx++] = 0x10U; /* CONNECT */
+    idx += MQTT_EncodeRemainingLength(&buf[idx], remain);
+
+    buf[idx++] = 0x00U;
+    buf[idx++] = 0x04U;
+    memcpy(&buf[idx], "MQTT", 4U);
+    idx += 4U;
+    buf[idx++] = 0x04U;       /* MQTT 3.1.1 */
+    buf[idx++] = 0x02U;       /* Clean Session */
+    buf[idx++] = (uint8_t)(keep_alive_sec >> 8);
+    buf[idx++] = (uint8_t)(keep_alive_sec);
+    buf[idx++] = (uint8_t)(cid_len >> 8);
+    buf[idx++] = (uint8_t)(cid_len);
+    memcpy(&buf[idx], client_id, cid_len);
+    idx += cid_len;
+
+    return idx;
+}
+```
+
+当 `client_id = "stm32"`、`keep_alive = 60` 时，完整报文为：
+
+```text
+10 11 00 04 4D 51 54 54 04 02 00 3C 00 05 73 74 6D 33 32
+```
+
+完整实现见 `code_examples/ch11_mqtt_packet_stm32f103/Core/Src/mqtt_packet.c`。
+
+#### 11.7.5 PUBLISH 报文构造
+
+在 QoS0 基础上扩展可变 QoS 与 Packet Identifier：
+
+```c
+uint16_t MQTT_BuildPublish(uint8_t *buf, const char *topic,
+                           const char *payload, uint8_t qos, uint16_t pkt_id)
+{
+    uint16_t topic_len = (uint16_t)strlen(topic);
+    uint16_t payload_len = (uint16_t)strlen(payload);
+    uint32_t remain = 2U + topic_len + payload_len;
+    uint16_t idx = 0;
+
+    if (qos > 2U) {
+        qos = 0U;
+    }
+    if (qos > 0U) {
+        remain += 2U;
+    }
+
+    buf[idx++] = (uint8_t)(0x30U | ((qos & 0x03U) << 1));
+    idx += MQTT_EncodeRemainingLength(&buf[idx], remain);
+
     buf[idx++] = (uint8_t)(topic_len >> 8);
     buf[idx++] = (uint8_t)(topic_len);
     memcpy(&buf[idx], topic, topic_len);
     idx += topic_len;
+
+    if (qos > 0U) {
+        buf[idx++] = (uint8_t)(pkt_id >> 8);
+        buf[idx++] = (uint8_t)(pkt_id);
+    }
+
     memcpy(&buf[idx], payload, payload_len);
     idx += payload_len;
 
     return idx;
 }
 ```
+
+示例：主题 `farm/greenhouse/temp`、载荷 `26.5`、QoS0 时首字节为 `0x30`；QoS1 且 Packet Id = 1 时首字节为 `0x32`，主题名后插入 `00 01`。
+
+#### 11.7.6 工程实践与 PicSimLab 仿真
+
+**表 11-9** 示例工程目录（`code_examples/ch11_mqtt_packet_stm32f103/`）
+<!-- tab:ch11-9 示例工程目录（code_examples/ch11_mqtt_packet_stm32f103/） -->
+
+| 路径 | 说明 |
+|------|------|
+| `Core/Src/mqtt_packet.c` | CONNECT / PUBLISH 组包 |
+| `Application/mqtt_packet_demo.c` | USART1 十六进制打印 |
+| `Doc/cubemx_config.md` | CubeMX 引脚与集成步骤 |
+| `Doc/picsimlab_steps.md` | PicSimLab 启动与现象分析 |
+
+仿真步骤概要：
+
+1. CubeMX 配置 STM32F103C8，USART1 = 115200（TX=PA9），生成工程并加入示例源文件；
+2. 在 `main.c` 的 `USER CODE BEGIN 2` 中调用 `MQTT_PacketDemo_Run(&huart1)`；
+3. 编译得到 `.hex`，在 PicSimLab 加载 Blue Pill 与 UART Terminal（115200）；
+4. 复位后应依次看到 CONNECT、PUBLISH QoS0、PUBLISH QoS1 三段十六进制输出。
+
+![PicSimLab 串口报文输出](assets/images/ch11_mqtt_picsimlab.png)
+
+**图 11-3** PicSimLab 仿真：USART1 打印 CONNECT 与 PUBLISH（QoS0/QoS1）报文字节流。
+<!-- fig:ch11-3-picsimlab PicSimLab 仿真：USART1 打印 CONNECT 与 PUBLISH（QoS0/QoS1）报文字节流。 -->
+
+#### 11.7.7 本节小结
+
+- MQTT 通过 Broker 与 Topic 实现发布/订阅解耦，适合农业物联网一对多上报；
+- CONNECT 建立会话，PUBLISH 承载传感数据，均可手动组包后经 TCP 发送；
+- QoS0 无确认；QoS1 需 PUBACK，固定头与 Packet Id 不同；
+- 资源受限 MCU 可先经 USART 验证报文，再对接 ESP8266 连接 Broker。
 
 ---
 
@@ -351,8 +496,8 @@ uint16_t MQTT_BuildPublish(uint8_t *buf, const char *topic,
                                                               └──────────┘
 ```
 
-**图 11-3** 农业物联网系统架构：多个 CAN 节点采集数据，网关汇聚后通过 Wi-Fi/MQTT 上报云平台。
-<!-- fig:ch11-3 农业物联网系统架构：多个 CAN 节点采集数据，网关汇聚后通过 Wi-Fi/MQTT 上报云平台。 -->
+**图 11-4** 农业物联网系统架构：多个 CAN 节点采集数据，网关汇聚后通过 Wi-Fi/MQTT 上报云平台。
+<!-- fig:ch11-4 农业物联网系统架构：多个 CAN 节点采集数据，网关汇聚后通过 Wi-Fi/MQTT 上报云平台。 -->
 
 **系统特点：**
 
@@ -367,7 +512,7 @@ uint16_t MQTT_BuildPublish(uint8_t *buf, const char *topic,
 
 - **有线通信**：UART 用于调试和短距点对点；SPI 用于高速外设；I2C 用于低速传感器；CAN 用于长距离多节点网络
 - **无线通信**：ESP8266 Wi-Fi 适合近距离联网；LoRa 适合远距离低功耗场景
-- **MQTT 协议**：发布/订阅模型适合物联网的一对多通信
+- **MQTT 协议**：发布/订阅模型适合物联网的一对多通信；CONNECT/PUBLISH 可手动组包后经 TCP 上云
 - **系统集成**：CAN 总线 + Wi-Fi 网关 + MQTT 云平台是农业物联网的典型架构
 
 ---

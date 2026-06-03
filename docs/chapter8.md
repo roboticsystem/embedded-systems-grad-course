@@ -342,6 +342,8 @@ stop
 ![图8-4 主程序流程图](assets/ch8/ch8-4.png)
 
 **图 8-4** 主程序流程图（PlantUML 脚本生成，上图为其渲染效果）。
+
+
 **工程源码位置**：本节的完整 STM32CubeIDE 工程位于 `code_examples/OLED_SSD1306_Driver/`。
 #### 8.4.5 PicsimLab 仿真验证
 仿真环境搭建
@@ -353,6 +355,8 @@ stop
 
 **图 8-5** PicsimLab 仿真引脚接线。
 运行结果截图
+
+
 ![图8-6 仿真运行结果图](assets/ch8/ch8-6.png)
 
 **图 8-6** PicsimLab 仿真运行效果：屏幕显示温度 29.0°C、湿度 68.0% 及 “SSD1306 OK”。

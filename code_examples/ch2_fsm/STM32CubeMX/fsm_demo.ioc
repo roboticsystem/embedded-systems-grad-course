@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- STM32CubeMX Configuration File -->
+<config>
+  <project Name="fsm_demo" Version="6.8.0" TargetToolchain="STM32CubeIDE" TargetLanguage="C" TargetDevice="STM32F407ZGTx">
+    <TargetConfiguration>
+      <TargetDevice>STM32F407ZGTx</TargetDevice>
+      <TargetToolchain>STM32CubeIDE</TargetToolchain>
+      <TargetLanguage>C</TargetLanguage>
+      <ProjectType>Application</ProjectType>
+    </TargetConfiguration>
+    <BoardConfiguration>
+      <BoardName>STM32F4-POLOLU</BoardName>
+    </BoardConfiguration>
+    <ClockConfiguration>
+      <ClockTree>
+        <HSEState>DISABLED</HSEState>
+        <HSIState>ENABLED</HSIState>
+        <LSEState>DISABLED</LSEState>
+        <LSIState>DISABLED</LSIState>
+        <PLLState>ENABLED</PLLState>
+        <PLLSource>HSI</PLLSource>
+        <PLLM>16</PLLM>
+        <PLLN>336</PLLN>
+        <PLLP>4</PLLP>
+        <PLLQ>7</PLLQ>
+        <SystemClockSource>PLLCLK</SystemClockSource>
+        <AHBPrescaler>1</AHBPrescaler>
+        <APB1Prescaler>4</APB1Prescaler>
+        <APB2Prescaler>2</APB2Prescaler>
+        <SystemClock>84000000</SystemClock>
+      </ClockTree>
+    </ClockConfiguration>
+    <PinOut>
+      <Pin Name="PA0" Direction="GPIO_Input" Mode="GPIO_Mode_IN" Pull="GPIO_PullUp" Label="KEY_PW0"/>
+      <Pin Name="PA1" Direction="GPIO_Input" Mode="GPIO_Mode_IN" Pull="GPIO_PullUp" Label="KEY_PW1"/>
+      <Pin Name="PA2" Direction="GPIO_Input" Mode="GPIO_Mode_IN" Pull="GPIO_PullUp" Label="KEY_PW2"/>
+      <Pin Name="PB0" Direction="GPIO_Output" Mode="GPIO_Mode_OUT" Pull="GPIO_NOPULL" Label="LED_LOCKED"/>
+      <Pin Name="PB1" Direction="GPIO_Output" Mode="GPIO_Mode_OUT" Pull="GPIO_NOPULL" Label="LED_UNLOCKED"/>
+      <Pin Name="PB2" Direction="GPIO_Output" Mode="GPIO_Mode_OUT" Pull="GPIO_NOPULL" Label="LED_ALARM"/>
+      <Pin Name="PB3" Direction="GPIO_Output" Mode="GPIO_Mode_OUT" Pull="GPIO_NOPULL" Label="BUZZER"/>
+    </PinOut>
+    <Middleware>
+      <RTOS>DISABLED</RTOS>
+    </Middleware>
+    <CodeGenerator>
+      <GenerateHALDriver>ENABLED</GenerateHALDriver>
+      <GenerateUserCode>ENABLED</GenerateUserCode>
+      <Toolchain>STM32CubeIDE</Toolchain>
+    </CodeGenerator>
+  </project>
+</config>

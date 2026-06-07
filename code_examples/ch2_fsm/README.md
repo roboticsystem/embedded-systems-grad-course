@@ -1,92 +1,71 @@
-# 第2章 状态机模式 - STM32工程示例
+# 第2章 状态机模式 - STM32 工程示例
 
 ## 项目概述
 
-本工程实现了一个基于有限状态机（FSM）的智能门锁控制系统，包含两种实现方式：
-- Switch-Case 实现
-- 表驱动实现
+基于有限状态机（FSM）的智能门锁演示，目标板 **Blue Pill（STM32F103C8Tx）**，支持 PicSimLab 仿真。
+
+- Switch-Case 实现（`fsm.h` 中切换宏）
+- 表驱动实现（默认）
 
 ## 硬件配置
 
-| 硬件模块 | 引脚配置 | 功能说明 |
-|----------|----------|----------|
-| 按键输入 | PA0、PA1、PA2 | 密码输入按键 |
-| LED输出 | PB0 | 锁定状态指示 |
-| LED输出 | PB1 | 解锁状态指示 |
-| LED输出 | PB2 | 报警状态指示 |
-| 蜂鸣器 | PB3 | 报警声音输出 |
+| 硬件模块 | 引脚 | 功能 |
+|----------|------|------|
+| 按键 | PA0、PA1、PA2 | 密码输入（上拉，低电平有效） |
+| LED | PB0 | LOCKED |
+| LED | PB1 | UNLOCKED |
+| LED | PB2 | ALARM |
+| 蜂鸣器 | PB3 | 报警声 |
 
 ## 工程结构
 
 ```
 ch2_fsm/
 ├── STM32CubeMX/
-│   └── fsm_demo.ioc          # CubeMX配置文件
-├── Core/
-│   ├── Inc/
-│   │   ├── main.h
-│   │   ├── fsm.h
-│   │   └── gpio.h
-│   └── Src/
-│       ├── main.c
-│       ├── fsm.c
-│       └── gpio.c
-├── Drivers/
-│   └── STM32F4xx_HAL_Driver/
-│       └── Inc/
-│           └── stm32f4xx_hal.h
+│   ├── fsm_demo.ioc              # CubeMX 配置（F103C8）
+│   ├── Core/                     # 应用源码 + HAL 配置
+│   └── STM32CubeIDE/             # CubeIDE 工程（导入此目录）
+├── Core/                         # 与 STM32CubeMX/Core 同步的源码副本
+├── picsimlab/README.md           # PicSimLab 连线与启动说明
 └── README.md
 ```
 
-## 状态机设计
-
-### 状态定义
-- `STATE_LOCKED` - 锁定状态（初始状态）
-- `STATE_UNLOCKED` - 解锁状态
-- `STATE_OPEN` - 门打开状态
-- `STATE_ALARM` - 报警状态
-
-### 事件定义
-- `EVENT_PASSWORD_OK` - 密码正确
-- `EVENT_PASSWORD_ERR` - 密码错误
-- `EVENT_ERR_LIMIT` - 错误次数达到上限
-- `EVENT_TIMEOUT` - 超时事件
-- `EVENT_DOOR_PUSH` - 推门事件
-- `EVENT_DOOR_CLOSE` - 门关闭事件
-- `EVENT_ADMIN_RESET` - 管理员复位
+> `STM32CubeMX/Drivers/` 由 CubeMX **Generate Code** 生成，不纳入 Git（见 `.gitignore`）。
 
 ## 使用方法
 
-### 1. 使用CubeMX配置
-1. 打开 `STM32CubeMX/fsm_demo.ioc`
-2. 点击"Generate Code"生成工程
-3. 使用CubeIDE打开生成的工程
+### 1. 生成 HAL 并导入 CubeIDE
 
-### 2. 编译运行
-1. 在CubeIDE中编译工程
-2. 下载到STM32开发板
-3. 观察LED状态指示
+1. 用 **STM32CubeMX** 打开 `STM32CubeMX/fsm_demo.ioc`
+2. **Project → Generate Code**（会生成 `STM32CubeMX/Drivers/`）
+3. **STM32CubeIDE → Import** 目录：`STM32CubeMX/STM32CubeIDE/`
+4. **Project → Build**，得到 `Debug/fsm_demo.hex`
+
+### 2. PicSimLab 仿真
+
+见 [picsimlab/README.md](picsimlab/README.md)：
+
+- Board：**Blue Pill**
+- 加载 `Debug/fsm_demo.hex`
+- Parts：Push Buttons（PA0–PA2，Active=Low）+ LEDs（PB0–PB2，Active=High）
 
 ### 3. 操作说明
-- 按下PA0-PA2按键输入密码
-- 正确密码：PA0 -> PA1 -> PA2（依次按下）
-- 错误密码：任意其他组合
-- 连续3次错误触发报警
-- 复位按钮可解除报警
+
+- 正确密码：依次按 **PA0 → PA1 → PA2**
+- 连续 3 次错误 → ALARM（PB2 亮）
+- 复位按钮回到 LOCKED
 
 ## 实现方式切换
 
-在 `main.c` 中通过宏定义选择实现方式：
-```c
-// 选择Switch-Case实现
-#define FSM_IMPLEMENTATION_SWITCH_CASE 1
+在 `Core/Inc/fsm.h` 中：
 
-// 或选择表驱动实现
+```c
+#define FSM_IMPLEMENTATION_SWITCH_CASE  0
 #define FSM_IMPLEMENTATION_TABLE_DRIVEN 1
 ```
 
 ## 注意事项
 
-- 本工程不包含编译生成文件（.o、.d、.elf、.bin、.hex）
-- 需使用STM32CubeMX 6.0+ 和 STM32CubeIDE 1.8+
-- 建议使用STM32F407开发板进行测试
+- 不含编译产物（`.elf` / `.hex` / `Debug/`）
+- 需 STM32CubeMX 6.x + CubeIDE + 本地 **STM32Cube FW_F1** 包
+- PB3 作蜂鸣器输出，已在 `stm32f1xx_hal_msp.c` 中关闭 JTAG（`NOJTAG`）

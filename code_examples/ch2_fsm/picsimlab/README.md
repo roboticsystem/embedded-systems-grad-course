@@ -1,47 +1,47 @@
-# PicSimLab 仿真配置说明
+# PicSimLab 仿真配置说明（Blue Pill / STM32F103C8）
 
 ## 启动命令
 
-```bash
-# 启动仿真
-picsimlab -m STM32F4-POLOLU -f config.psl
+PICSimLab 官方命令格式：
 
-# 如果需要加载hex文件
-picsimlab -m STM32F4-POLOLU -f config.psl -i fsm_demo.hex
+```bash
+picsimlab "Blue Pill" stm32f103c8t6 path/to/fsm_demo.hex path/to/fsm_demo.pcf
 ```
 
-## 硬件连接
+Windows 示例（按你的安装路径调整）：
 
-| MCU引脚 | 外设 | 功能 |
+```powershell
+& "F:\PicsimLab\picsimlab.exe" "Blue Pill" stm32f103c8t6 `
+  "G:\masterStudy\qianrushi\code_examples\ch2_fsm\STM32CubeMX\STM32CubeIDE\Debug\fsm_demo.hex"
+```
+
+或在 GUI 中：**Board → Blue Pill**，然后 **File → Load Hex/Binary** 加载固件。
+
+## Parts 连线
+
+| MCU 引脚 | 外设 | 功能 |
 |---------|------|------|
-| PA0 | 按键1 | 密码位0输入 |
-| PA1 | 按键2 | 密码位1输入 |
-| PA2 | 按键3 | 密码位2输入 |
-| PB0 | LED1 | 锁定状态指示 |
-| PB1 | LED2 | 解锁状态指示 |
-| PB2 | LED3 | 报警状态指示 |
-| PB3 | 蜂鸣器 | 报警声音输出 |
+| PA0 | 按键 1 + GND | 密码位 0 |
+| PA1 | 按键 2 + GND | 密码位 1 |
+| PA2 | 按键 3 + GND | 密码位 2 |
+| PB0 | LED 1 + GND | 锁定指示 |
+| PB1 | LED 2 + GND | 解锁指示 |
+| PB2 | LED 3 + GND | 报警指示 |
+| PB3 | 蜂鸣器 | 报警声音 |
+
+在 Spare Parts 中添加 **Push Buttons** 和 **LEDs**，右键 **Properties** 或点击引脚名分配 MCU 引脚。
 
 ## 操作说明
 
-1. **启动仿真**：执行启动命令
-2. **初始状态**：系统处于LOCKED状态，LED1点亮
-3. **输入密码**：依次点击PA0、PA1、PA2按键
-4. **解锁成功**：密码正确后LED2点亮，LED1熄灭
-5. **触发报警**：连续输入错误密码3次，LED3点亮，蜂鸣器响
-6. **复位**：点击复位按钮，系统回到初始状态
-
-## 预期效果
-
-| 状态 | LED1 | LED2 | LED3 | 蜂鸣器 |
-|------|------|------|------|--------|
-| LOCKED | 亮 | 灭 | 灭 | 关 |
-| UNLOCKED | 灭 | 亮 | 灭 | 关 |
-| OPEN | 灭 | 亮 | 灭 | 关 |
-| ALARM | 灭 | 灭 | 亮 | 开 |
+1. 编译 CubeIDE 工程，生成 `Debug/fsm_demo.hex`（已启用 hex/bin 转换）
+2. 启动 PICSimLab，选择 **Blue Pill**
+3. 加载 hex，点击 **Run**
+4. 初始 **LOCKED**：PB0 对应 LED 亮
+5. 依次按 PA0 → PA1 → PA2，进入 **UNLOCKED**
+6. 连续输错 3 次密码，进入 **ALARM**（PB2 亮，蜂鸣器响）
 
 ## 注意事项
 
-1. 确保已安装PicSimLab 0.8.10+
-2. 确保STM32F4-POLOLU板支持已安装
-3. hex文件需自行编译生成
+1. 固件目标芯片为 **STM32F103C8Tx**，与 Blue Pill 一致
+2. PB3 在 F103 上默认是 JTAG 引脚，代码中已通过 `__HAL_AFIO_REMAP_SWJ_NOJTAG()` 释放
+3. `config.psl` 不是 PICSimLab 官方格式，可忽略；外设布局请用 **File → Save configuration** 存为 `.pcf`

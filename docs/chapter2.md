@@ -457,7 +457,7 @@ HSM 的主要优势包括：
 
 | 硬件模块 | 连接说明 |
 |----------|----------|
-| MCU | STM32F407 |
+| MCU | STM32F103C8（Blue Pill） |
 | 按键输入 | PA0、PA1、PA2（模拟密码输入） |
 | LED 输出 | PB0（锁定状态）、PB1（解锁状态）、PB2（报警状态） |
 | 蜂鸣器 | PB3（报警输出） |
@@ -465,9 +465,11 @@ HSM 的主要优势包括：
 ##### 2.3.6.2 仿真启动命令
 
 ```bash
-# 启动 PicSimLab 并加载配置
-picsimlab -m STM32F4-POLOLU -f code_examples/ch2_fsm/picsimlab/config.psl
+# 启动 PICSimLab（Blue Pill + F103 固件）
+picsimlab "Blue Pill" stm32f103c8t6 code_examples/ch2_fsm/STM32CubeMX/STM32CubeIDE/Debug/fsm_demo.hex
 ```
+
+或在 GUI：**Board → Blue Pill**，**File → Load Hex/Binary** 加载 `fsm_demo.hex`。
 
 ##### 2.3.6.3 运行步骤
 
@@ -487,6 +489,20 @@ picsimlab -m STM32F4-POLOLU -f code_examples/ch2_fsm/picsimlab/config.psl
 | 推门动作 | OPEN | PB1 亮 | 无 |
 | 3次错误 | ALARM | PB2 亮 | 响 |
 | 管理员复位 | LOCKED | PB0 亮 | 无 |
+
+##### 2.3.6.5 仿真截图
+
+**图 2-12** PicSimLab 仿真锁定状态（LOCKED）：Blue Pill 板卡与 Spare Parts 外设布局，PB0 对应 LED 点亮。
+
+![PicSimLab FSM 锁定状态](assets/images/ch2-fsm-picsimlab-locked.png)
+
+<!-- fig:ch2-12 PicSimLab 仿真锁定状态（LOCKED，PB0 亮） -->
+
+**图 2-13** PicSimLab 仿真解锁状态（UNLOCKED）：依次输入 PA0→PA1→PA2 后，PB1 对应 LED 点亮，PB0 熄灭。
+
+![PicSimLab FSM 解锁状态](assets/images/ch2-fsm-picsimlab-unlocked.png)
+
+<!-- fig:ch2-13 PicSimLab 仿真解锁状态（UNLOCKED，PB1 亮） -->
 
 ---
 

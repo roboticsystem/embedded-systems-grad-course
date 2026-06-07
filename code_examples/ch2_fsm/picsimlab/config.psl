@@ -1,0 +1,40 @@
+# PicSimLab Configuration File for FSM Demo
+# Author: Zhou Qing
+# Date: 2024
+
+[board]
+name=STM32F4-POLOLU
+processor=STM32F407ZGTx
+
+[clock]
+source=HSI
+frequency=16000000
+
+[uart]
+uart1=enabled
+baud=115200
+
+[gpio]
+# PA0-PA2: 按键输入
+PA0=input,pullup,label=KEY_PW0
+PA1=input,pullup,label=KEY_PW1
+PA2=input,pullup,label=KEY_PW2
+
+# PB0-PB3: LED和蜂鸣器输出
+PB0=output,low,label=LED_LOCKED
+PB1=output,low,label=LED_UNLOCKED
+PB2=output,low,label=LED_ALARM
+PB3=output,low,label=BUZZER
+
+[display]
+show_gpio=yes
+show_uart=yes
+
+[script]
+# 初始化脚本
+init=echo "FSM Demo initialized"
+run=echo "Starting FSM Demo..."
+
+[debug]
+enabled=no
+port=3333

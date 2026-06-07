@@ -1,0 +1,20 @@
+# CubeIDE / CubeMX build output
+Debug/
+Release/
+.settings/
+*.launch
+
+# Firmware binaries
+*.o
+*.d
+*.elf
+*.bin
+*.hex
+*.map
+*.lst
+*.su
+*.cyclo
+
+# CubeMX generated (run Generate Code after clone)
+STM32CubeMX/Drivers/
+.mxproject

@@ -548,7 +548,7 @@ void pubsub_publish(EventType type, uint32_t data) {
 
 #### 2.5.1 环形缓冲区（Ring Buffer）
 
-环形缓冲区是嵌入式中最常见的**线程安全数据结构**，用于在不同速率的生产者与消费者之间解耦：
+生产者-消费者模式用于解决“数据产生速度”和“数据处理速度”不一致的问题。在嵌入式系统中，生产者通常是中断服务函数、DMA 完成回调或外设驱动，消费者通常是主循环、后台任务或协议解析模块。二者通过一个固定大小的 FIFO 缓冲区连接，使实时路径快速返回，复杂处理延后执行。
 
 ```text
   写指针 (head)                  读指针 (tail)
@@ -561,87 +561,144 @@ void pubsub_publish(EventType type, uint32_t data) {
                   缓冲区循环使用
 ```
 
+下面的 Ring Buffer 使用“保留一个空槽”的方式区分满与空：`head == tail` 表示空，`(head + 1) % SIZE == tail` 表示满。`head` 与 `tail` 被声明为 `volatile`，并在修改索引时进入临界区，避免 ISR 与主循环同时访问造成竞态。
+
 ```c
-#define RING_BUF_SIZE  64   /* 必须是 2 的幂次，便于取模 */
+#include <stdbool.h>
+#include <stdint.h>
+
+#define RING_BUFFER_SIZE  64U
+#define RING_BUFFER_MASK  (RING_BUFFER_SIZE - 1U)
+
+#if (RING_BUFFER_SIZE & RING_BUFFER_MASK)
+#error "RING_BUFFER_SIZE must be a power of two"
+#endif
 
 typedef struct {
-    uint8_t  buf[RING_BUF_SIZE];
-    volatile uint16_t head;   /* 写指针（生产者修改） */
-    volatile uint16_t tail;   /* 读指针（消费者修改） */
+    uint8_t buf[RING_BUFFER_SIZE];
+    volatile uint16_t head;   /* 写索引：生产者推进 */
+    volatile uint16_t tail;   /* 读索引：消费者推进 */
 } RingBuffer;
 
-static inline void ring_buf_init(RingBuffer *rb) {
-    rb->head = rb->tail = 0;
+static inline uint32_t ring_buffer_enter_critical(void) {
+    uint32_t primask = __get_PRIMASK();
+    __disable_irq();
+    return primask;
 }
 
-/* 返回 true 表示写入成功，false 表示缓冲区已满 */
-static inline bool ring_buf_push(RingBuffer *rb, uint8_t byte) {
-    uint16_t next_head = (rb->head + 1) & (RING_BUF_SIZE - 1);
-    if (next_head == rb->tail) return false;  /* 满 */
-    rb->buf[rb->head] = byte;
-    rb->head = next_head;
-    return true;
+static inline void ring_buffer_exit_critical(uint32_t primask) {
+    __set_PRIMASK(primask);
 }
 
-/* 返回 true 表示读取成功，false 表示缓冲区为空 */
-static inline bool ring_buf_pop(RingBuffer *rb, uint8_t *byte) {
-    if (rb->head == rb->tail) return false;   /* 空 */
-    *byte = rb->buf[rb->tail];
-    rb->tail = (rb->tail + 1) & (RING_BUF_SIZE - 1);
-    return true;
+void ring_buffer_init(RingBuffer *rb) {
+    uint32_t primask = ring_buffer_enter_critical();
+    rb->head = 0U;
+    rb->tail = 0U;
+    ring_buffer_exit_critical(primask);
 }
 
-static inline bool ring_buf_empty(const RingBuffer *rb) {
+bool ring_buffer_is_empty(const RingBuffer *rb) {
     return rb->head == rb->tail;
+}
+
+bool ring_buffer_is_full(const RingBuffer *rb) {
+    uint16_t next_head = (uint16_t)((rb->head + 1U) & RING_BUFFER_MASK);
+    return next_head == rb->tail;
+}
+
+bool ring_buffer_push(RingBuffer *rb, uint8_t byte) {
+    bool ok = false;
+    uint32_t primask = ring_buffer_enter_critical();
+    uint16_t next_head = (uint16_t)((rb->head + 1U) & RING_BUFFER_MASK);
+
+    if (next_head != rb->tail) {
+        rb->buf[rb->head] = byte;
+        rb->head = next_head;
+        ok = true;
+    }
+
+    ring_buffer_exit_critical(primask);
+    return ok;
+}
+
+bool ring_buffer_pop(RingBuffer *rb, uint8_t *byte) {
+    bool ok = false;
+    uint32_t primask = ring_buffer_enter_critical();
+
+    if (rb->head != rb->tail) {
+        *byte = rb->buf[rb->tail];
+        rb->tail = (uint16_t)((rb->tail + 1U) & RING_BUFFER_MASK);
+        ok = true;
+    }
+
+    ring_buffer_exit_critical(primask);
+    return ok;
 }
 ```
 
-> ⚠️ **并发安全提示：** 在单生产者/单消费者场景下（ISR 写入，任务读取），只要 head/tail 的读写是原子的（32 位 MCU 上通常满足），上述实现是安全的。多生产者或多消费者场景下需要加锁。
+> ⚠️ **并发安全提示：** 裸机工程可使用 `__disable_irq()` / `__set_PRIMASK()` 保护临界区；RTOS 工程应按上下文选择 `taskENTER_CRITICAL()`、互斥锁或 `FromISR` 系列 API。ISR 中仍要保持短小，不能在临界区里执行解析、打印、动态内存分配等耗时操作。
 
-#### 2.5.2 ISR 与任务解耦实战
+#### 2.5.2 ISR 与主循环解耦实战
 
-以 USART 接收为例，展示生产者-消费者在实际项目中的完整应用：
+以 USART 接收为例，串口中断是生产者，只负责读取硬件寄存器并写入缓冲区；主循环是消费者，负责协议解析和业务处理。这样即使短时间内连续收到多个字节，也不会因为解析耗时阻塞中断响应。
 
 ```c
-/* 全局接收缓冲区 */
-static RingBuffer s_uart_rx_buf;
+static RingBuffer s_uart_rx_buffer;
+static volatile uint32_t s_uart_rx_overflow = 0U;
 
-/* ── 生产者：USART 中断（ISR 上下文） ── */
-void USART1_IRQHandler(void) {
-    if (__HAL_UART_GET_FLAG(&huart1, UART_FLAG_RXNE)) {
-        uint8_t byte = (uint8_t)(huart1.Instance->DR & 0xFF);
-        ring_buf_push(&s_uart_rx_buf, byte);
-        /* ISR 中不做任何解析，仅入队 */
-    }
+void app_init(void) {
+    ring_buffer_init(&s_uart_rx_buffer);
+    uart_enable_rx_interrupt();
 }
 
-/* ── 消费者：串口处理任务（任务上下文） ── */
-void task_uart_process(void *arg) {
-    uint8_t byte;
-    for (;;) {
-        while (ring_buf_pop(&s_uart_rx_buf, &byte)) {
-            cmd_parser_feed(byte);   /* 逐字节喂给命令解析器 */
+/* 生产者：USART 中断服务函数 */
+void USART1_IRQHandler(void) {
+    if (__HAL_UART_GET_FLAG(&huart1, UART_FLAG_RXNE) != RESET) {
+        uint8_t byte = (uint8_t)(huart1.Instance->DR & 0xFFU);
+
+        if (!ring_buffer_push(&s_uart_rx_buffer, byte)) {
+            s_uart_rx_overflow++;      /* 缓冲区满，只记录丢包 */
         }
-        osDelay(1);   /* 让出 CPU，1ms 轮询一次 */
+    }
+
+    /* ISR 中不解析命令、不打印日志、不等待资源 */
+}
+
+/* 消费者：主循环后台处理 */
+int main(void) {
+    uint8_t byte;
+
+    platform_init();
+    app_init();
+
+    while (1) {
+        while (ring_buffer_pop(&s_uart_rx_buffer, &byte)) {
+            protocol_parser_feed(byte);
+        }
+
+        control_task_poll();
+        display_task_poll();
     }
 }
 ```
 
 ```text
-  USART 硬件                  环形缓冲区               命令解析任务
+  USART 硬件                  环形缓冲区                 主循环
   ─────────────              ─────────────            ────────────────
-  接收到字节                                           每 1ms 醒来一次
+  接收到字节                                           轮询后台任务
       │                                                     │
       ▼                       ┌──────────┐                  │
-  USART1_IRQHandler  ──push──▶│ RingBuf  │──pop──▶  cmd_parser_feed()
-  （高优先级，快速返回）        └──────────┘          （低优先级，可阻塞）
+  USART1_IRQHandler  ──push──▶│ RingBuf  │──pop──▶  protocol_parser_feed()
+  （高优先级，快速返回）        └──────────┘          （低优先级，可耗时）
 ```
+
+核心原则可以概括为：**中断短小、主循环消费、缓冲区削峰**。生产者只做“必须立刻完成”的采集动作，消费者在较低优先级上下文中完成解析、状态机更新和业务处理。
 
 #### 2.5.3 三种嵌入式程序结构
 
-本小节讨论三种常见的嵌入式程序结构模式：模式 1（最慢，单任务轮询）、模式 2（多任务，一个任务循环处理一个外设）与模式 3（中断模式，含中断上半部/下半部，通过信号量协作）。每种模式给出适用场景、优缺点、关键实现要点与简化代码示例，并辅以时序图或模块交互图，便于工程实践选择与权衡。
+本小节讨论三种常见的嵌入式程序结构：轮询结构、前后台/中断驱动结构、多任务/RTOS 结构。三者都可能使用生产者-消费者思想，但生产者和消费者所在的上下文不同，实时性、复杂度和资源开销也不同。
 
-##### 4.5.3.1 模式 1：单任务轮询（最慢但最简单）
+##### 2.5.3.1 模式 1：单任务轮询（最慢但最简单）
 
 - 核心思想：在一个主循环中顺序轮询各个外设或模块，适用于资源极其受限或实时性要求极低的场景。
 - 适用场景：非常简单的设备、早期原型或对实时性无严格要求的小型控制器。
@@ -688,7 +745,7 @@ int main(void) {
 
 ---
 
-##### 4.5.3.2 模式 2：多任务（每任务负责一个外设的循环处理）
+##### 2.5.3.2 模式 2：多任务（每任务负责一个外设的循环处理）
 
 - 核心思想：将系统分解为多个独立的循环任务，每个任务负责一个外设或功能模块，通过 RTOS 提供的任务调度实现并发与优先级控制。
 - 适用场景：功能清晰划分、需并发处理若干 IO 或复杂逻辑的中等规模嵌入式系统。
@@ -747,7 +804,7 @@ int main(void) {
 
 ---
 
-##### 4.5.3.3 模式 3：中断驱动（上半部/下半部）
+##### 2.5.3.3 模式 3：中断驱动（上半部/下半部）
 
 - 核心思想：以外设中断作为事件触发机制，在 ISR（上半部）进行最小化处理（捕获时间戳、读寄存器、缓存数据、通知任务），将耗时或复杂处理延后到任务上下文的下半部完成（通过信号量、消息队列或任务通知实现协作）。
 - 适用场景：对响应时间有严格要求的系统，需要在中断到达时快速响应并在更高层完成复杂处理的场合。
@@ -814,20 +871,18 @@ void vDataProcessTask(void *pv) {
 
 ---
 
-##### 4.5.3.4 三种模式对比（工程决策参考）
+##### 2.5.3.4 三种模式对比（工程决策参考）
 
-**表 2-4** 三种模式对比（工程决策参考）
-<!-- tab:ch2-4 三种模式对比（工程决策参考） -->
+**表 2-4** 三种嵌入式程序结构对比
+<!-- tab:ch2-4 三种嵌入式程序结构对比 -->
 
-| 模式 | 响应延迟 | 实现复杂度 | 资源开销 | 适用场景 |
-|---|---:|---:|---:|---|
-| 单任务轮询 | 高（最差） | 低 | 最小 | 简单原型、资源极限设备 |
-| 多任务（RTOS） | 中等（可调） | 中等 | 中等（需要 RTOS 支撑） | 需并发处理与优先级控制的系统 |
-| 中断驱动（上/下半部） | 最低（最好） | 高 | 中等 | 对延迟敏感的实时场景 |
+| 程序结构 | 生产者位置 | 消费者位置 | 响应实时性 | 实现复杂度 | 资源占用 | 适用场景 |
+|---|---|---|---|---|---|---|
+| 轮询结构 | 主循环周期检查外设 | 同一主循环立即处理 | 较差，取决于轮询周期 | 低 | 最小 | 简单原型、按键扫描、低速传感器 |
+| 前后台/中断驱动 | ISR、DMA 回调、定时器回调 | 主循环后台任务 | 较好，中断可及时捕获事件 | 中等 | 小 | 裸机系统、串口接收、脉冲计数 |
+| 多任务/RTOS | ISR 或高优先级任务 | 低优先级任务或工作队列 | 好，可通过优先级调度 | 较高 | 较高 | 多外设并发、通信协议栈、复杂控制系统 |
 
 工程建议：在实际工程中，常常采用混合策略——对严格实时的事件使用中断上/下半部，对周期性或非关键业务使用任务循环，通过 RTOS 原语进行协作，以达到响应性与系统可维护性的平衡。
-
----
 
 ---
 

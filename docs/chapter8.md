@@ -92,27 +92,22 @@ void LED_Breathe(TIM_HandleTypeDef *htim, uint32_t channel)
 ```
 
 ---
-
 ### 8.3 七段数码管
-
 七段数码管由 7 个 LED 段（a~g）和 1 个小数点（dp）组成，可显示 0~9 和部分字母。
 
 **表 8-1** 共阴极数码管段码表
-<!-- tab:ch8-1 共阴极数码管段码表 -->
-
 | 数字 | dp g f e d c b a | 十六进制 |
-|:----:|:----------------:|:--------:|
-| 0 | 0 0 1 1 1 1 1 1 | 0x3F |
-| 1 | 0 0 0 0 0 1 1 0 | 0x06 |
-| 2 | 0 1 0 1 1 0 1 1 | 0x5B |
-| 3 | 0 1 0 0 1 1 1 1 | 0x4F |
-| 4 | 0 1 1 0 0 1 1 0 | 0x66 |
-| 5 | 0 1 1 0 1 1 0 1 | 0x6D |
-| 6 | 0 1 1 1 1 1 0 1 | 0x7D |
-| 7 | 0 0 0 0 0 1 1 1 | 0x07 |
-| 8 | 0 1 1 1 1 1 1 1 | 0x7F |
-| 9 | 0 1 1 0 1 1 1 1 | 0x6F |
-
+|:----:|:---------------:|:--------:|
+| 0    | 0 0 1 1 1 1 1 1 | 0x3F     |
+| 1    | 0 0 0 0 0 1 1 0 | 0x06     |
+| 2    | 0 1 0 1 1 0 1 1 | 0x5B     |
+| 3    | 0 1 0 0 1 1 1 1 | 0x4F     |
+| 4    | 0 1 1 0 0 1 1 0 | 0x66     |
+| 5    | 0 1 1 0 1 1 0 1 | 0x6D     |
+| 6    | 0 1 1 1 1 1 0 1 | 0x7D     |
+| 7    | 0 0 0 0 0 1 1 1 | 0x07     |
+| 8    | 0 1 1 1 1 1 1 1 | 0x7F     |
+| 9    | 0 1 1 0 1 1 1 1 | 0x6F     |
 ```c
 /* 数码管段码表（共阴极） */
 static const uint8_t seg_table[] = {
@@ -126,6 +121,66 @@ void SEG_Display(uint8_t digit)
     if (digit > 9) return;
     /* 假设 a~g 连接 PA0~PA6 */
     GPIOA->ODR = (GPIOA->ODR & 0xFF80) | seg_table[digit];
+}
+```
+
+#### 8.3.1 完整段码定义（0~9 + A~F）
+```c
+/* 数码管段码表（共阴极） 0~9 + A~F 完整 */
+static const uint8_t seg_table[] = {
+    0x3F,0x06,0x5B,0x4F,0x66,0x6D,0x7D,0x07,
+    0x7F,0x6F,0x77,0x7C,0x39,0x5E,0x79,0x71
+};
+```
+#### 8.3.2 静态单数码管显示函数
+```c
+// 静态单数码管显示函数
+void seg_static_show(uint8_t num)
+{
+    uint8_t code = seg_table[num];
+    HAL_GPIO_Write(GPIOA, code);
+}
+```
+#### 8.3.3 4 位数码管动态扫描驱动（含消隐处理）
+```c
+// 4位数码管动态扫描（带消隐，消除残影）
+void seg_dynamic_scan(uint8_t buf[4])
+{
+    // 第一位
+    HAL_GPIO_Write(GPIOB, 0xFF); // 消隐清段，去残影
+    HAL_GPIO_Write(GPIOA, seg_table[buf[0]]);
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_0, GPIO_PIN_SET);
+    HAL_Delay(1);
+
+    // 第二位
+    HAL_GPIO_Write(GPIOB, 0xFF); // 消隐清段
+    HAL_GPIO_Write(GPIOA, seg_table[buf[1]]);
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1, GPIO_PIN_SET);
+    HAL_Delay(1);
+
+    // 第三位
+    HAL_GPIO_Write(GPIOB, 0xFF); // 消隐清段
+    HAL_GPIO_Write(GPIOA, seg_table[buf[2]]);
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_2, GPIO_PIN_SET);
+    HAL_Delay(1);
+
+    // 第四位
+    HAL_GPIO_Write(GPIOB, 0xFF); // 消隐清段
+    HAL_GPIO_Write(GPIOA, seg_table[buf[3]]);
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_3, GPIO_PIN_SET);
+    HAL_Delay(1);
+}
+```
+#### 8.3.4 主函数调用演示，实现多位数字稳定显示
+```c
+// 主函数调用演示，实现多位数字稳定显示
+int main(void)
+{
+    uint8_t disp_data[4] = {1,2,3,4};
+    while(1)
+    {
+        seg_dynamic_scan(disp_data);
+    }
 }
 ```
 

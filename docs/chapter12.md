@@ -181,55 +181,257 @@ $$寿命 = \frac{2000 \text{ mAh}}{0.071 \times 12} = 2347 \text{ 小时} \appro
 
 ### 12.4 可靠性保障
 
+在工业级嵌入式产品设计中，可靠性不仅意味着代码没有 Bug，更意味着系统在受到电磁干扰（EMI）、电源波动或软件偶发异常时能够自动恢复。本节重点介绍独立看门狗和非易失性存储两个核心模块。
+
 #### 12.4.1 独立看门狗（IWDG）
 
-IWDG 使用独立的 LSI 时钟，即使主时钟失效也能复位 MCU：
+IWDG 是一个独立的硬件定时器，它使用专用的低速内部时钟（LSI，约 40kHz）。由于 LSI 独立于主系统时钟（HSE/HSI），即使内核因时钟配置错误卡死，IWDG 依然能正常工作。
 
+**1. 配置原理**
+超时时间 $T_{out}$ 的计算公式为：
+$T_{out} = \frac{Prescaler \times Reload}{f_{LSI}}$
+例如：预分频设为 64，重装载值设为 625，则 $T_{out} = \frac{64 \times 625}{40000} = 1.0$ 秒。
+
+**2. C 代码实现**
 ```c
-/* CubeMX 配置 IWDG：预分频 64，重载 625 → 超时约 1s */
+IWDG_HandleTypeDef hiwdg;
+
+/* IWDG 初始化：配置为 1s 超时 */
 void WDG_Init(void)
 {
-    hiwdg.Instance       = IWDG;
-    hiwdg.Init.Prescaler = IWDG_PRESCALER_64;
-    hiwdg.Init.Reload    = 625;
-    HAL_IWDG_Init(&hiwdg);
+    hiwdg.Instance = IWDG;
+    hiwdg.Init.Prescaler = IWDG_PRESCALER_64; // 预分频器 64
+    hiwdg.Init.Reload = 625;                  // 重装载值 625 (1秒)
+    if (HAL_IWDG_Init(&hiwdg) != HAL_OK)
+    {
+        /* 初始化失败通常意味着硬件异常 */
+        Error_Handler();
+    }
 }
 
-/* 主循环中喂狗 */
-while (1) {
-    HAL_IWDG_Refresh(&hiwdg);  /* 必须在 1s 内执行 */
-    /* ... 正常任务 ... */
+/* 喂狗逻辑：必须在 1s 内调用一次 */
+void WDG_Refresh(void)
+{
+    HAL_IWDG_Refresh(&hiwdg);
 }
 ```
 
 #### 12.4.2 Flash 参数存储
 
-将配置参数（PID 系数、传感器校准值、通信地址）存入 Flash 末页，断电不丢失：
+STM32 的内部 Flash 除了存放程序，常被用于模拟 EEPROM 存储配置参数（如 PID 调优值、设备 ID）。
 
+**1. 操作规则**
+*   **先擦后写**：Flash 只能将位从 1 写为 0。因此，在写入新数据前必须按“页”擦除（将整页设为 0xFFFF）。
+*   **解锁与锁定**：操作 Flash 前必须解锁，操作完成后立即锁定以防程序跑飞时误写。
+
+**2. C 代码实现**
 ```c
-#define PARAM_ADDR  0x0800FC00  /* Flash 最后一页起始地址 */
+#define PARAM_PAGE_ADDR  0x0800FC00  /* Flash 最后一页起始地址 (Page 63) */
 
+/**
+ * @brief 保存参数到 Flash
+ * @param data 指向数据的指针, len 字节长度 (必须为2的倍数)
+ */
 void Param_Save(const uint8_t *data, uint16_t len)
 {
-    HAL_FLASH_Unlock();
-    FLASH_EraseInitTypeDef erase;
-    erase.TypeErase   = FLASH_TYPEERASE_PAGES;
-    erase.PageAddress = PARAM_ADDR;
-    erase.NbPages     = 1;
-    uint32_t error;
-    HAL_FLASHEx_Erase(&erase, &error);
+    uint32_t PageError = 0;
+    FLASH_EraseInitTypeDef EraseInitStruct;
 
+    HAL_FLASH_Unlock(); // 1. 解锁
+
+    /* 2. 配置擦除参数：擦除单页 */
+    EraseInitStruct.TypeErase   = FLASH_TYPEERASE_PAGES;
+    EraseInitStruct.PageAddress = PARAM_PAGE_ADDR;
+    EraseInitStruct.NbPages     = 1;
+
+    if (HAL_FLASHEx_Erase(&EraseInitStruct, &PageError) != HAL_OK) {
+        Error_Handler();
+    }
+
+    /* 3. 循环写入半字 (16-bit) */
     for (uint16_t i = 0; i < len; i += 2) {
-        uint16_t half_word = data[i] | (data[i + 1] << 8);
-        HAL_FLASH_Program(FLASH_TYPEPROGRAM_HALFWORD,
-                          PARAM_ADDR + i, half_word);
+        uint16_t val = data[i] | (data[i + 1] << 8);
+        if (HAL_FLASH_Program(FLASH_TYPEPROGRAM_HALFWORD, 
+                             PARAM_PAGE_ADDR + i, val) != HAL_OK) {
+            Error_Handler();
+        }
+    }
+
+    HAL_FLASH_Lock(); // 4. 锁定
+}
+
+/**
+ * @brief 从 Flash 读取参数
+ */
+void Param_Load(uint8_t *data, uint16_t len)
+{
+    /* Flash 可以像内存一样通过指针直接读取 */
+    memcpy(data, (const void *)PARAM_PAGE_ADDR, len);
+}
+```
+
+#### 12.4.3 错误处理框架
+
+`Error_Handler` 是系统的最后一道防线。当检测到不可恢复的错误（如 Flash 校验失败、传感器断路）时，系统应进入安全状态并等待重启。
+
+```c
+/**
+ * @brief 系统错误处理函数
+ */
+void Error_Handler(void)
+{
+    /* 1. 禁用全局中断，防止干扰 */
+    __disable_irq();
+
+    /* 2. 进入死循环，并以特定频率闪烁 LED 报警 */
+    while (1)
+    {
+        HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13); // 假设 LED 在 PC13
+        for (volatile uint32_t i = 0; i < 500000; i++); 
+
+        /* 注意：此处故意不喂狗！
+           当 IWDG 计时达到 1s 后，硬件将自动产生复位信号，
+           从而使系统尝试重新初始化，实现故障自恢复。 */
+    }
+}
+```
+
+
+#### 12.4.4 综合代码示例
+
+本小节展示如何在一个典型的“传感器采集”应用中整合看门狗和 Flash 存储功能。系统启动时会从 Flash 加载配置，在运行过程中周期性喂狗，并在检测到异常时通过停止喂狗实现自恢复。
+
+**1. 程序逻辑流程**
+
+```plantuml
+@startuml
+skinparam ActivityBackgroundColor #E3F2FD
+skinparam ActivityBorderColor #1565C0
+
+start
+:系统初始化 (HAL/时钟/GPIO);
+:从 Flash 加载运行参数;
+if (参数合法?) then (否)
+  :使用默认参数;
+endif
+:启动 IWDG (1s 超时);
+
+repeat
+  :读取传感器数据;
+  :处理业务逻辑;
+  if (发生严重错误?) then (是)
+    :进入 Error_Handler;
+    note right: 停止喂狗，等待重启
+  endif
+  :执行 IWDG 喂狗;
+  :进入低功耗延时;
+repeat while (true)
+@enduml
+```
+
+**2. 完整 C 代码实现 (核心逻辑)**
+
+```c
+/* 包含必要的头文件 */
+#include "main.h"
+#include <string.h>
+
+/* 配置参数结构体 */
+typedef struct {
+    uint16_t device_id;
+    float threshold;
+    uint32_t magic_num; // 用于校验参数是否有效
+} Config_t;
+
+#define CONFIG_MAGIC  0x5A5A1234
+Config_t g_config;
+IWDG_HandleTypeDef hiwdg;
+
+/* 函数声明 */
+void SystemClock_Config(void);
+void WDG_Init(void);
+void Param_Load(Config_t *conf);
+void Param_Save(Config_t *conf);
+
+int main(void)
+{
+    /* 1. 硬件基础初始化 */
+    HAL_Init();
+    SystemClock_Config();
+    MX_GPIO_Init();
+    
+    /* 2. 恢复参数 */
+    Param_Load(&g_config);
+    if (g_config.magic_num != CONFIG_MAGIC) {
+        // 如果 Flash 中没有有效参数，初始化为默认值
+        g_config.device_id = 0x0001;
+        g_config.threshold = 25.5f;
+        g_config.magic_num = CONFIG_MAGIC;
+        Param_Save(&g_config);
+    }
+
+    /* 3. 启动看门狗 */
+    WDG_Init();
+
+    /* 4. 主循环 */
+    while (1)
+    {
+        // 模拟传感器采集
+        float temperature = Read_Sensor();
+        
+        // 异常判断示例
+        if (temperature > 100.0f || temperature < -40.0f) {
+            Error_Handler(); // 传感器异常，进入错误处理并等待重启
+        }
+
+        // 正常业务逻辑...
+        Process_Data(temperature);
+
+        // 5. 及时喂狗
+        HAL_IWDG_Refresh(&hiwdg);
+
+        HAL_Delay(100); // 循环周期
+    }
+}
+
+/* --- 可靠性模块的具体实现 --- */
+
+void WDG_Init(void) {
+    hiwdg.Instance = IWDG;
+    hiwdg.Init.Prescaler = IWDG_PRESCALER_64;
+    hiwdg.Init.Reload = 625; // 1秒超时
+    HAL_IWDG_Init(&hiwdg);
+}
+
+void Param_Save(Config_t *conf) {
+    FLASH_EraseInitTypeDef erase;
+    uint32_t error;
+    
+    HAL_FLASH_Unlock();
+    erase.TypeErase = FLASH_TYPEERASE_PAGES;
+    erase.PageAddress = 0x0800FC00; // Page 63
+    erase.NbPages = 1;
+    
+    if (HAL_FLASHEx_Erase(&erase, &error) == HAL_OK) {
+        uint16_t *pData = (uint16_t *)conf;
+        for (uint16_t i = 0; i < sizeof(Config_t); i += 2) {
+            HAL_FLASH_Program(FLASH_TYPEPROGRAM_HALFWORD, 0x0800FC00 + i, *pData++);
+        }
     }
     HAL_FLASH_Lock();
 }
 
-void Param_Load(uint8_t *data, uint16_t len)
-{
-    memcpy(data, (const void *)PARAM_ADDR, len);
+void Param_Load(Config_t *conf) {
+    memcpy(conf, (void*)0x0800FC00, sizeof(Config_t));
+}
+
+void Error_Handler(void) {
+    __disable_irq();
+    while (1) {
+        // 闪烁 LED 报错，不喂狗，等待 IWDG 复位
+        HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
+        HAL_Delay(100);
+    }
 }
 ```
 

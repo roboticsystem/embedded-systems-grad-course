@@ -1063,144 +1063,240 @@ taskEXIT_CRITICAL();
 
 ### 2.8 综合实战：多模式温控系统
 
-本节将前述所有模式组合，实现一个具有**手动/自动/节能三种工作模式**的温控风扇系统。
+本节将前述模式组合为一个小型温控风扇控制器。系统提供**手动、自动、节能**三种工作模式，既能按温度闭环调节风扇，也能通过串口命令切换模式、修改目标温度和查看运行状态。
 
 #### 2.8.1 系统架构
 
-```text
-  ┌──────────────────────────────────────────────────────────────┐
-  │                        应用层                                 │
-  │   ┌─────────────────────┐    ┌───────────────────────────┐   │
-  │   │   温控状态机 (FSM)   │    │  串口命令解析器 (命令模式) │   │
-  │   └──────────┬──────────┘    └─────────────┬─────────────┘   │
-  └──────────────┼─────────────────────────────┼─────────────────┘
-                 │                             │
-  ┌──────────────┼─────────────────────────────┼─────────────────┐
-  │              │         服务层              │                   │
-  │   ┌──────────▼──────────┐    ┌─────────────▼─────────────┐   │
-  │   │   温度滤波服务       │    │    事件队列（观察者模式）   │   │
-  │   └──────────┬──────────┘    └─────────────┬─────────────┘   │
-  └──────────────┼─────────────────────────────┼─────────────────┘
-                 │                             │
-  ┌──────────────┼─────────────────────────────┼─────────────────┐
-  │              │         驱动层              │                   │
-  │   ┌──────────▼──────────┐    ┌─────────────▼─────────────┐   │
-  │   │  ADC 驱动（生产者）  │    │   UART 驱动（生产者）      │   │
-  │   │  PWM 驱动（消费者）  │    │   RingBuffer（缓冲区）     │   │
-  │   └─────────────────────┘    └───────────────────────────┘   │
-  └─────────────────────────────────────────────────────────────┘
+系统按分层架构组织，如图 2-7 所示。ADC 温度采样与 UART 接收作为生产者进入服务层，温控状态机与命令解析器在应用层完成决策，状态变化再通过观察者接口通知显示、日志或报警模块。
+
+```bob
+  +------------------------------------------------------------------+
+  | "应用层 Application"                                             |
+  | +-------------------------+     +------------------------------+ |
+  | | "温控状态机 FSM"        |<----| "串口命令解析器 Command"     | |
+  | | "WorkMode + SysState"   |     | "mode/set/fan/status"        | |
+  | +-----------+-------------+     +---------------+--------------+ |
+  |             |                                   |                |
+  |             v                                   v                |
+  | +-------------------------+     +------------------------------+ |
+  | | "观察者通知 Observer"   |---->| "OLED/日志/报警订阅者"       | |
+  | +-------------------------+     +------------------------------+ |
+  +-------------+-----------------------------------+----------------+
+                |                                   |
+  +-------------v-----------------------------------v----------------+
+  | "服务层 Service"                                                |
+  | +-------------------------+     +------------------------------+ |
+  | | "温度滤波服务"          |     | "命令参数校验"               | |
+  | +-----------+-------------+     +---------------+--------------+ |
+  +-------------+-----------------------------------+----------------+
+                |                                   |
+  +-------------v-----------------------------------v----------------+
+  | "驱动层 Driver / HAL"                                           |
+  | +-------------------------+     +------------------------------+ |
+  | | "ADC 温度采样 Producer" |     | "UART + RingBuffer Producer" | |
+  | +-------------------------+     +------------------------------+ |
+  | | "PWM 风扇 Consumer"     |     | "GPIO 蜂鸣器/LED"           | |
+  | +-------------------------+     +------------------------------+ |
+  +------------------------------------------------------------------+
 ```
 
+**图 2-7** 多模式温控系统架构与设计模式组合
+<!-- fig:ch2-7 多模式温控系统架构与设计模式组合 -->
+
 #### 2.8.2 状态机定义
+
+状态机同时维护系统状态 `SysState` 与工作模式 `WorkMode`。模式描述"控制策略"，状态描述"设备当前处境"，两者分离后，手动模式、自动模式和节能模式可以共享过热、传感器故障等全局保护逻辑。
 
 ```c
 /* 工作模式 */
 typedef enum {
-    MODE_MANUAL,   /* 手动：串口直接设置风速 */
-    MODE_AUTO,     /* 自动：根据温度 PID 控制 */
-    MODE_ECO       /* 节能：低于阈值时关闭风扇 */
+    MODE_MANUAL,    /* 手动：串口直接指定风速 */
+    MODE_AUTO,      /* 自动：按目标温度比例调速 */
+    MODE_ECO        /* 节能：带回差的低功耗控制 */
 } WorkMode;
 
 /* 系统状态 */
 typedef enum {
-    SYS_IDLE,       /* 空闲：温度正常，风扇停转 */
-    SYS_COOLING,    /* 制冷：风扇运转中 */
-    SYS_OVERHEAT,   /* 过热：全速运转并报警 */
-    SYS_ERROR       /* 故障：传感器异常 */
+    SYS_IDLE,        /* 温度正常，风扇停转 */
+    SYS_COOLING,     /* 风扇正在散热 */
+    SYS_OVERHEAT,    /* 过热保护，全速散热并报警 */
+    SYS_SENSOR_FAULT /* 传感器异常，进入安全状态 */
 } SysState;
+
+typedef enum {
+    EVT_TEMP_UPDATED,
+    EVT_MODE_CHANGED,
+    EVT_SETPOINT_CHANGED,
+    EVT_FAN_CHANGED,
+    EVT_FAULT_DETECTED
+} ThermoEvent;
 
 typedef struct {
     SysState  state;
     WorkMode  mode;
     float     temperature;
-    uint8_t   fan_speed;    /* 0–100% */
-    float     setpoint;     /* 目标温度 */
+    float     setpoint;      /* 目标温度，单位：摄氏度 */
+    uint8_t   fan_speed;     /* 当前风速，范围：0-100 */
+    uint8_t   manual_fan;    /* 手动模式下的风速设定 */
+    bool      sensor_ok;
 } ThermoCtrl;
 
 static ThermoCtrl s_ctrl = {
-    .state       = SYS_IDLE,
-    .mode        = MODE_AUTO,
-    .setpoint    = 30.0f,
-    .fan_speed   = 0,
+    .state      = SYS_IDLE,
+    .mode       = MODE_AUTO,
+    .setpoint   = 30.0f,
+    .sensor_ok  = true,
 };
 ```
 
 #### 2.8.3 各模式的状态转移
 
-```c
-void thermo_update(float new_temp) {
-    s_ctrl.temperature = new_temp;
+温度更新函数是状态机的核心入口。全局保护逻辑先处理传感器故障与过热，再按当前工作模式执行具体控制策略：自动模式按误差调速，节能模式使用回差避免频繁启停，手动模式只执行串口指定的风速。
 
-    /* 全局过热检测（各模式均适用） */
-    if (new_temp > 60.0f) {
-        fan_set_speed(100);
+```c
+static uint8_t clamp_percent(int value) {
+    if (value < 0)   return 0;
+    if (value > 100) return 100;
+    return (uint8_t)value;
+}
+
+static void thermo_enter(SysState next_state) {
+    if (s_ctrl.state != next_state) {
+        s_ctrl.state = next_state;
+        thermo_publish(EVT_TEMP_UPDATED, &s_ctrl);
+    }
+}
+
+static void thermo_set_fan(uint8_t speed) {
+    s_ctrl.fan_speed = clamp_percent(speed);
+    fan_set_pwm(s_ctrl.fan_speed);
+    thermo_publish(EVT_FAN_CHANGED, &s_ctrl);
+}
+
+void thermo_update(float new_temp, bool sensor_ok) {
+    s_ctrl.temperature = new_temp;
+    s_ctrl.sensor_ok = sensor_ok;
+
+    if (!sensor_ok) {
+        thermo_set_fan(0);
         alarm_beep(true);
-        s_ctrl.state = SYS_OVERHEAT;
+        thermo_enter(SYS_SENSOR_FAULT);
+        thermo_publish(EVT_FAULT_DETECTED, &s_ctrl);
+        return;
+    }
+    if (new_temp > 60.0f) {
+        thermo_set_fan(100);
+        alarm_beep(true);
+        thermo_enter(SYS_OVERHEAT);
         return;
     }
     if (s_ctrl.state == SYS_OVERHEAT && new_temp < 55.0f) {
         alarm_beep(false);
-        s_ctrl.state = SYS_COOLING;
     }
 
+    int speed = 0;
     switch (s_ctrl.mode) {
         case MODE_AUTO: {
-            float err = new_temp - s_ctrl.setpoint;
-            uint8_t spd = (err > 0) ? (uint8_t)(err * 5.0f) : 0;
-            spd = (spd > 100) ? 100 : spd;
-            fan_set_speed(spd);
-            s_ctrl.state = (spd > 0) ? SYS_COOLING : SYS_IDLE;
+            float error = new_temp - s_ctrl.setpoint;
+            speed = (error > 0.0f) ? (int)(error * 8.0f) : 0;
             break;
         }
         case MODE_ECO:
-            if (new_temp > s_ctrl.setpoint + 2.0f) {
-                fan_set_speed(40);
-                s_ctrl.state = SYS_COOLING;
-            } else {
-                fan_set_speed(0);
-                s_ctrl.state = SYS_IDLE;
-            }
+            if (new_temp > s_ctrl.setpoint + 2.0f) speed = 40;
+            else if (new_temp < s_ctrl.setpoint - 1.0f) speed = 0;
+            else speed = s_ctrl.fan_speed;  /* 回差区保持原风速 */
             break;
-
         case MODE_MANUAL:
-            /* 手动模式：不自动修改风速，仅更新状态显示 */
-            s_ctrl.state = (s_ctrl.fan_speed > 0) ? SYS_COOLING : SYS_IDLE;
+            speed = s_ctrl.manual_fan;
             break;
     }
+
+    thermo_set_fan((uint8_t)clamp_percent(speed));
+    thermo_enter(s_ctrl.fan_speed > 0 ? SYS_COOLING : SYS_IDLE);
 }
 ```
 
 #### 2.8.4 串口命令集成
 
+串口命令使用命令模式实现。新增命令只需追加 `Command` 表项，不需要修改命令分发逻辑。
+
 ```c
 static void cmd_mode(const char *args) {
-    if      (strcmp(args, "auto")   == 0) s_ctrl.mode = MODE_AUTO;
-    else if (strcmp(args, "manual") == 0) s_ctrl.mode = MODE_MANUAL;
+    if      (strcmp(args, "manual") == 0) s_ctrl.mode = MODE_MANUAL;
+    else if (strcmp(args, "auto")   == 0) s_ctrl.mode = MODE_AUTO;
     else if (strcmp(args, "eco")    == 0) s_ctrl.mode = MODE_ECO;
-    else { printf("用法: mode <auto|manual|eco>\r\n"); return; }
+    else {
+        printf("用法: mode <manual|auto|eco>\r\n");
+        return;
+    }
+    thermo_publish(EVT_MODE_CHANGED, &s_ctrl);
     printf("模式已切换为: %s\r\n", args);
 }
 
+static void cmd_setpoint(const char *args) {
+    float target = (float)atof(args);
+    if (target < 10.0f || target > 50.0f) {
+        printf("设定温度范围: 10.0-50.0\r\n");
+        return;
+    }
+    s_ctrl.setpoint = target;
+    thermo_publish(EVT_SETPOINT_CHANGED, &s_ctrl);
+    printf("目标温度已设置为: %.1f°C\r\n", s_ctrl.setpoint);
+}
+```
+
+手动风速命令只在 `MODE_MANUAL` 下生效，避免自动模式下串口命令与闭环控制同时争夺执行器。
+
+```c
 static void cmd_fan(const char *args) {
     if (s_ctrl.mode != MODE_MANUAL) {
         printf("请先切换到手动模式: mode manual\r\n");
         return;
     }
-    uint8_t spd = (uint8_t)atoi(args);
-    spd = (spd > 100) ? 100 : spd;
-    fan_set_speed(spd);
-    s_ctrl.fan_speed = spd;
-    printf("风速设置为: %d%%\r\n", spd);
+    s_ctrl.manual_fan = clamp_percent(atoi(args));
+    thermo_set_fan(s_ctrl.manual_fan);
+    thermo_enter(s_ctrl.fan_speed > 0 ? SYS_COOLING : SYS_IDLE);
+    printf("手动风速设置为: %u%%\r\n", s_ctrl.manual_fan);
 }
 
 static void cmd_status(const char *args) {
-    static const char *state_str[] = { "空闲", "制冷中", "过热!", "故障" };
-    static const char *mode_str[]  = { "手动", "自动",   "节能"         };
-    printf("温度: %.1f°C | 设定值: %.1f°C | 风速: %d%% | "
-           "状态: %s | 模式: %s\r\n",
+    static const char *state_str[] = {
+        "空闲", "散热中", "过热保护", "传感器故障"
+    };
+    static const char *mode_str[] = { "手动", "自动", "节能" };
+
+    (void)args;
+    printf("温度: %.1f°C | 目标: %.1f°C | 风速: %u%% | "
+           "模式: %s | 状态: %s\r\n",
            s_ctrl.temperature, s_ctrl.setpoint, s_ctrl.fan_speed,
-           state_str[s_ctrl.state], mode_str[s_ctrl.mode]);
+           mode_str[s_ctrl.mode], state_str[s_ctrl.state]);
 }
+
+static const Command thermo_cmds[] = {
+    { "mode",   cmd_mode,     "mode <manual|auto|eco>  切换工作模式" },
+    { "set",    cmd_setpoint, "set <10.0-50.0>         设置目标温度" },
+    { "fan",    cmd_fan,      "fan <0-100>             手动模式风速" },
+    { "status", cmd_status,   "status                  查看状态"     },
+};
+```
+
+典型串口交互如下，命令同时覆盖模式切换和目标温度设定两个验收点。
+
+```text
+> status
+温度: 31.5°C | 目标: 30.0°C | 风速: 12% | 模式: 自动 | 状态: 散热中
+
+> set 28.5
+目标温度已设置为: 28.5°C
+
+> mode eco
+模式已切换为: eco
+
+> mode manual
+模式已切换为: manual
+
+> fan 60
+手动风速设置为: 60%
 ```
 
 #### 2.8.5 设计模式应用总结
@@ -1211,11 +1307,13 @@ static void cmd_status(const char *args) {
 | 使用的模式 | 在本项目中的体现 | 解决的问题 |
 |-----------|----------------|-----------|
 | **分层架构** | HAL → 驱动 → 服务 → 应用 | 驱动与逻辑解耦，可独立替换 |
-| **状态机** | SysState + WorkMode 双状态机 | 清晰描述系统行为，避免 if-else 混乱 |
-| **观察者/回调** | UART 中断注册回调 | ISR 不直接调用业务逻辑 |
+| **状态机** | `SysState` + `WorkMode` 双状态 | 清晰描述系统行为，避免 if-else 混乱 |
+| **观察者/回调** | `thermo_publish()` 通知状态变化 | 显示、日志、报警模块与控制逻辑解耦 |
 | **生产者-消费者** | RingBuffer + 处理任务 | 中断安全，速率解耦 |
-| **命令模式** | cmd_table 函数指针表 | 扩展命令无需修改分发逻辑 |
+| **命令模式** | `thermo_cmds` 函数指针表 | 扩展命令无需修改分发逻辑 |
 | **单例 + 互斥锁** | ADC/PWM 单例封装 | 防止并发访问外设冲突 |
+
+至此，系统架构图、三种工作模式状态机以及串口命令接口均已闭环。实际工程中还应补充温度传感器校准、风扇堵转检测和参数掉电保存等机制，使课堂案例进一步接近量产固件。
 
 ---
 
@@ -1420,8 +1518,8 @@ AI 代码生成本质上是利用大规模预训练模型（如 GPT-4、Copilot 
 ```
 
 
-**图 2-7** 该框图展示了原理与流程的核心结构，读者可以从中把握各功能单元的层次划分与协作方式。
-<!-- fig:ch2-7 该框图展示了原理与流程的核心结构，读者可以从中把握各功能单元的层次划分与协作方式。 -->
+**图 2-8** 该框图展示了原理与流程的核心结构，读者可以从中把握各功能单元的层次划分与协作方式。
+<!-- fig:ch2-8 该框图展示了原理与流程的核心结构，读者可以从中把握各功能单元的层次划分与协作方式。 -->
 
 ##### 4.11.2.2 主流 AI 代码生成工具对比
 
@@ -1463,8 +1561,8 @@ AI 代码生成本质上是利用大规模预训练模型（如 GPT-4、Copilot 
 ```
 
 
-**图 2-8** 上图直观呈现了工程案例：AI 自动生成外设驱动代码的组成要素与数据通路，有助于理解系统整体的工作机理。
-<!-- fig:ch2-8 上图直观呈现了工程案例：AI 自动生成外设驱动代码的组成要素与数据通路，有助于理解系统整体的工作机理。 -->
+**图 2-9** 上图直观呈现了工程案例：AI 自动生成外设驱动代码的组成要素与数据通路，有助于理解系统整体的工作机理。
+<!-- fig:ch2-9 上图直观呈现了工程案例：AI 自动生成外设驱动代码的组成要素与数据通路，有助于理解系统整体的工作机理。 -->
 
 **核心代码示例：**
 
@@ -1502,8 +1600,8 @@ AI 自动化调试通过分析源代码、编译日志、运行时 trace 等信�
 ```
 
 
-**图 2-9** 上图以框图形式描绘了原理与典型流程的系统架构，清晰呈现了各模块之间的连接关系与信号流向。
-<!-- fig:ch2-9 上图以框图形式描绘了原理与典型流程的系统架构，清晰呈现了各模块之间的连接关系与信号流向。 -->
+**图 2-10** 上图以框图形式描绘了原理与典型流程的系统架构，清晰呈现了各模块之间的连接关系与信号流向。
+<!-- fig:ch2-10 上图以框图形式描绘了原理与典型流程的系统架构，清晰呈现了各模块之间的连接关系与信号流向。 -->
 
 ##### 4.11.3.2 AI 调试工具功能对比
 
@@ -1543,8 +1641,8 @@ AI 自动化调试通过分析源代码、编译日志、运行时 trace 等信�
 ```
 
 
-**图 2-10** 该框图展示了工程案例：AI 辅助定位嵌入式死循环与内存泄漏的核心结构，读者可以从中把握各功能单元的层次划分与协作方式。
-<!-- fig:ch2-10 该框图展示了工程案例：AI 辅助定位嵌入式死循环与内存泄漏的核心结构，读者可以从中把握各功能单元的层次划分与协作方式。 -->
+**图 2-11** 该框图展示了工程案例：AI 辅助定位嵌入式死循环与内存泄漏的核心结构，读者可以从中把握各功能单元的层次划分与协作方式。
+<!-- fig:ch2-11 该框图展示了工程案例：AI 辅助定位嵌入式死循环与内存泄漏的核心结构，读者可以从中把握各功能单元的层次划分与协作方式。 -->
 
 **AI 分析建议示例：**
 - “检测到 task_sensor_loop 任务 CPU 占用 100%，建议检查循环退出条件。”
@@ -1564,8 +1662,8 @@ AI 自动化调试通过分析源代码、编译日志、运行时 trace 等信�
 ```
 
 
-**图 2-11** 上图直观呈现了工程集成流程的组成要素与数据通路，有助于理解系统整体的工作机理。
-<!-- fig:ch2-11 上图直观呈现了工程集成流程的组成要素与数据通路，有助于理解系统整体的工作机理。 -->
+**图 2-12** 上图直观呈现了工程集成流程的组成要素与数据通路，有助于理解系统整体的工作机理。
+<!-- fig:ch2-12 上图直观呈现了工程集成流程的组成要素与数据通路，有助于理解系统整体的工作机理。 -->
 
 ##### 4.11.4.2 典型注意事项
 

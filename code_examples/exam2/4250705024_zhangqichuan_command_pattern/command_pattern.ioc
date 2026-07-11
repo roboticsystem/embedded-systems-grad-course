@@ -1,0 +1,57 @@
+#MicroXplorer Configuration settings - do not modify
+Mcu.Family=STM32F1
+Mcu.Name=STM32F103C8Tx
+Mcu.Package=LQFP48
+Mcu.Pin0=PC13-TAMPER-RTC
+Mcu.Pin1=PA0-WKUP
+Mcu.Pin2=PA9
+Mcu.Pin3=PA10
+Mcu.Pin4=PA13
+Mcu.Pin5=PA14
+Mcu.PinsNb=6
+Mcu.IP0=NVIC
+Mcu.IP1=RCC
+Mcu.IP2=SYS
+Mcu.IP3=USART1
+Mcu.IPNb=4
+Mcu.UserName=STM32F103C8Tx
+
+# ---------- 时钟：HSE 8MHz -> PLL x9 -> 72MHz ----------
+RCC.IPParameters=Family,HSE_VALUE,PLLMUL
+RCC.Family=Rcc
+RCC.HSE_VALUE=8000000
+RCC.PLLMUL=RCC_PLL_MUL9
+
+# ---------- USART1：PA9=TX, PA10=RX，115200 8N1，中断接收 ----------
+USART1.IPParameters=VirtualMode-Asynchronous,BaudRate,WordLength,Parity,StopBits
+USART1.VirtualMode-Asynchronous=VM_ASYNC
+USART1.Mode=MODE_TX_RX
+USART1.BaudRate=115200
+USART1.WordLength=UART_WORDLENGTH_8B
+USART1.Parity=UART_PARITY_NONE
+USART1.StopBits=UART_STOPBITS_1
+NVIC.USART1_IRQn=true\:0\:0\:true\:true\:true\:true\:true
+
+PA9.Signal=USART1_TX
+PA9.Mode=Asynchronous
+PA10.Signal=USART1_RX
+PA10.Mode=Asynchronous
+
+# ---------- GPIO：PC13 板载 LED，PA0 扩展 LED，均为推挽输出 ----------
+PC13-TAMPER-RTC.Signal=GPIO_Output
+PC13-TAMPER-RTC.GPIO_Label=LED_ONBOARD
+PC13-TAMPER-RTC.GPIOParameters=GPIO_Label
+PA0-WKUP.Signal=GPIO_Output
+PA0-WKUP.GPIO_Label=LED_EXT
+PA0-WKUP.GPIOParameters=GPIO_Label
+
+# ---------- SWD 调试口保留 ----------
+PA13.Mode=Serial_Wire
+PA13.Signal=SYS_JTMS-SWDIO
+PA14.Mode=Serial_Wire
+PA14.Signal=SYS_JTCK-SWCLK
+
+ProjectManager.ProjectName=command_pattern
+ProjectManager.TargetToolchain=STM32CubeIDE
+ProjectManager.DeviceId=STM32F103C8Tx
+ProjectManager.CoupleFile=false

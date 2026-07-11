@@ -35,12 +35,12 @@ static void uart_puts(const char *s) {           /* 阻塞回显 */
 /* ---------- 命令处理函数（Receiver 角色）---------- */
 static void cmd_led(int argc, char **argv) {     /* led on|off|toggle */
     if (argc < 2) { uart_puts("usage: led on|off|toggle\r\n"); return; }
-    GPIO_PinState set = GPIO_PIN_RESET;          /* PC13 低电平点亮 */
+    /* PC13 低电平点亮：on→拉低，off→拉高，toggle→翻转 */
     if      (!strcmp(argv[1], "on"))     HAL_GPIO_WritePin(LED_ONBOARD_GPIO_Port, LED_ONBOARD_Pin, GPIO_PIN_RESET);
     else if (!strcmp(argv[1], "off"))    HAL_GPIO_WritePin(LED_ONBOARD_GPIO_Port, LED_ONBOARD_Pin, GPIO_PIN_SET);
     else if (!strcmp(argv[1], "toggle")) HAL_GPIO_TogglePin(LED_ONBOARD_GPIO_Port, LED_ONBOARD_Pin);
     else { uart_puts("unknown arg\r\n"); return; }
-    (void)set; uart_puts("ok\r\n");
+    uart_puts("ok\r\n");
 }
 static void cmd_help(int argc, char **argv);     /* 前置声明，遍历命令表 */
 static void cmd_ver(int argc, char **argv) { (void)argc; (void)argv; uart_puts("cmdshell v1.0 STM32F103\r\n"); }

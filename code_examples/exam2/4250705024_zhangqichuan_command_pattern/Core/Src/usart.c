@@ -42,3 +42,14 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
         HAL_UART_Receive_IT(&huart1, &rx_byte, 1);    /* 重新武装中断 */
     }
 }
+
+/**
+ * @brief  UART 错误回调：帧/校验/过载错误后重新武装接收，避免接收永久停摆
+ * @note   线路噪声触发 FE/PE/ORE 时 HAL 会终止接收，此处重新挂起中断接收以恢复
+ */
+void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
+{
+    if (huart->Instance == USART1) {
+        HAL_UART_Receive_IT(&huart1, &rx_byte, 1);    /* 出错后重新武装，保证鲁棒性 */
+    }
+}

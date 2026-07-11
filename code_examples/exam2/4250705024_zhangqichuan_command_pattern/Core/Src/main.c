@@ -8,6 +8,7 @@
 #include "usart.h"
 #include "gpio.h"
 #include "command.h"
+#include <string.h>
 
 void SystemClock_Config(void);
 
@@ -18,7 +19,8 @@ int main(void)
     MX_GPIO_Init();                       /* PC13/PA0 LED 输出初始化 */
     MX_USART1_UART_Init();                /* USART1 115200 8N1 + 启动中断接收 */
 
-    HAL_UART_Transmit(&huart1, (uint8_t *)"cmdshell ready, type 'help'\r\n", 29, 100);
+    const char *banner = "cmdshell ready, type 'help'\r\n";   /* 长度由 strlen 计算，避免魔数 */
+    HAL_UART_Transmit(&huart1, (uint8_t *)banner, strlen(banner), 100);
     while (1) {
         cmd_process();                    /* 前台：解析并执行命令 */
     }

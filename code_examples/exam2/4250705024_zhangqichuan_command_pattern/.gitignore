@@ -1,0 +1,14 @@
+# 编译产物（硬性项：严禁入库）
+Debug/
+build/
+*.o
+*.d
+*.elf
+*.bin
+*.hex
+*.map
+*.list
+*.su
+
+# 供本地/Docker 编译用的 STM32 HAL/CMSIS 驱动，仿 PR#133 不入库
+Drivers/

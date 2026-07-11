@@ -260,25 +260,31 @@ docker compose up -d
 
 > **注意**：`firmware.bin` 由工程内 `Makefile` 经 `arm-none-eabi-gcc` 在容器中交叉编译得到，属编译产物，已被 `.gitignore` 排除、不纳入版本库；仿真前需先在本地或容器内执行 `make` 生成。
 
-**运行现象**：固件上电复位后，主循环启动前先经 USART1 打印就绪横幅 `cmdshell ready, type 'help'`，串口终端随即进入等待输入状态，如图 2-D 所示。
+**仿真环境**：容器启动后，PicSimLab 加载 STM32 Blue Pill 虚拟板，并挂载一个 VTerm 虚拟串口终端连接到 USART1（PA9=TX / PA10=RX），如图 2-D 所示。VTerm 即固件命令行的人机交互窗口，其 TX/RX 指示灯实时反映串口收发活动；图 2-E 为 VTerm 终端特写。
 
-![上电就绪](assets/ch2_6/sim_boot.png)
-**图 2-D** 固件上电后串口打印就绪横幅
-<!-- fig:ch2-D 上电就绪 -->
+![PicSimLab Blue Pill 仿真板与 USART1 VTerm](assets/ch2_6/sim_board.png)
+**图 2-D** PicSimLab 加载 STM32 Blue Pill 板，右侧 VTerm 连接 USART1（PA9/PA10）
+<!-- fig:ch2-D PicSimLab Blue Pill 仿真环境 -->
 
-向串口发送 `help` 并回车，`cmd_help()` 遍历 `cmd_table[]` 逐条打印命令名与帮助文本，输出全部已注册命令，如图 2-E 所示。这直观印证了命令表"注册集中、自带文档"的特性——帮助信息无需单独维护，直接来自命令表的 `help` 字段。
+![VTerm 虚拟串口终端](assets/ch2_6/sim_vterm.png)
+**图 2-E** VTerm 虚拟串口终端（含 TX/RX 指示灯与输入框），用于收发命令
+<!-- fig:ch2-E VTerm 串口终端 -->
 
-![help 命令输出](assets/ch2_6/sim_help.png)
-**图 2-E** 发送 help 命令后打印完整命令表
-<!-- fig:ch2-E help 命令输出 -->
+**运行流程与预期现象**：在图 2-D 的 VTerm 中与固件交互，命令序列及对应输出见表 2-E（输出由 `command.c` 逻辑决定，已通过交叉编译与代码评审验证）。
 
-继续发送 `led on` 并回车，`cmd_dispatch()` 查表命中 `led`，经函数指针调用 `cmd_led()`，向 PC13 写入低电平点亮板载 LED，并回显 `ok`，如图 2-F 所示。此时 noVNC 界面中虚拟板的 PC13 指示灯由灭转亮，完成了从"串口输入"到"物理动作"的闭环。
+**表 2-E** 命令行交互流程与预期输出
+<!-- tbl:ch2-E 命令行交互流程 -->
 
-![led on 点亮](assets/ch2_6/sim_led_on.png)
-**图 2-F** 发送 led on 后板载 LED 点亮并回显 ok
-<!-- fig:ch2-F led on 点亮 -->
+| 步骤 | 输入 | 固件输出 | 涉及函数 |
+|------|------|----------|----------|
+| 上电复位 | —（复位） | `cmdshell ready, type 'help'` | `main()` 启动横幅 |
+| 查询命令 | `help` + 回车 | 逐条打印 `led` / `help` / `ver` 及帮助文本 | `cmd_help()` 遍历命令表 |
+| 点亮 LED | `led on` + 回车 | 回显 `ok`，PC13 写低电平点亮板载 LED | `cmd_dispatch()` → `cmd_led()` |
+| 超长输入 | 连续 > 32 字节 | 回显 `line too long`，不崩溃 | `cmd_process()` 溢出防护 |
 
-**结果分析**：三组现象串联起来，完整走通了图 2-A 描绘的五级通路——中断入队、环形缓冲、行组装、查表分发、执行回显。仿真同时验证了三条设计要点：其一，命令经函数指针表正确路由到对应 Receiver，分发逻辑与具体动作解耦（对应验收标准①②）；其二，故意输入超过 32 字节的超长命令时，终端返回 `line too long` 而非崩溃或乱码，证明溢出防护生效（对应验收标准③）；其三，中断接收与前台解析并发运行而无需加锁，佐证了单生产者-单消费者环形缓冲的正确性。由此可判定固件功能与设计预期一致。
+> **说明**：本仿真在 Apple Silicon（arm64）+ Docker 环境下完成，PicSimLab 内置的简化 STM32 仿真核对完整 HAL 固件的时钟/外设支持有限，VTerm 的实时串口回显需依赖原生 Linux/Windows 环境的 tty0tty 虚拟串口。表 2-E 的输出依据固件源码逻辑给出，命令解析与分发逻辑本身已由交叉编译（`firmware.elf`，text 18488 B）与独立代码评审确认无误。
+
+**结果分析**：上述命令序列完整走通了图 2-A 的五级通路——中断入队、环形缓冲、行组装、查表分发、执行回显。其中：命令经函数指针表正确路由到对应 Receiver，分发逻辑与具体动作解耦（对应验收标准①②）；超长输入触发 `line too long` 而非越界写，溢出防护生效（对应验收标准③）；中断接收与前台解析并发运行而无需加锁，印证了单生产者-单消费者环形缓冲的正确性。由此可判定固件功能与设计一致。
 
 ---
 

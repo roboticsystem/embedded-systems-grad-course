@@ -9,6 +9,7 @@ nav:
       - 嵌入式系统基础:
         - 第1章 嵌入式系统概述: chapter1.md
         - 第2章 嵌入式软件设计模式: chapter2.md
+        - 2.6 命令模式（补充）: chapter2.6.md
       - STM32硬件编程:
         - 第3章 STM32单片机编程: chapter3.md
         - 第4章 单片机操作系统（FreeRTOS）: chapter4.md

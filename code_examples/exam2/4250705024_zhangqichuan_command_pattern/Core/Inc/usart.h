@@ -12,6 +12,7 @@ extern "C" {
 #endif
 
 #include "stm32f1xx_hal.h"
+#include "main.h"                    /* 提供 Error_Handler 原型与引脚宏 */
 
 extern UART_HandleTypeDef huart1;   /* USART1 句柄，供 command.c 回显调用 */
 

@@ -32,8 +32,20 @@ extern "C" {
   #define HSE_STARTUP_TIMEOUT    100U
 #endif
 
+#if !defined  (LSE_VALUE)
+  #define LSE_VALUE    32768U
+#endif
+
+#if !defined  (LSE_STARTUP_TIMEOUT)
+  #define LSE_STARTUP_TIMEOUT    5000U
+#endif
+
 #if !defined  (HSI_VALUE)
   #define HSI_VALUE    8000000U
+#endif
+
+#if !defined  (LSI_VALUE)
+  #define LSI_VALUE    40000U
 #endif
 
 /* ########################### System Configuration ######################### */
